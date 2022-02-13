@@ -26,3 +26,8 @@ heroku git:remote -a clan-support-bot
 ```
 git push heroku master
 ```
+
+5. herokuアプリの起動
+```
+heroku ps:scale worker=1
+```
