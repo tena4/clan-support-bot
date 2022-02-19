@@ -25,7 +25,7 @@ class TLVideoCog(commands.Cog):
         self.msg = None
         self.enabled = len(config.boss_names) == 5 and config.youtube_api_key != ""
         if self.enabled:
-            self.subsc_msgs: list[list[discord.Interaction]] = [[] for i in range(5)]
+            self.subsc_msgs: list[list[discord.Message]] = [[] for i in range(5)]
             self.cached_embeds: list[(str, list[discord.Embed])] = [() for i in range(5)]
             self.scheduled_tl_search.start()
 
@@ -56,7 +56,8 @@ class TLVideoCog(commands.Cog):
             err_msgs = []
             for msg in msgs:
                 try:
-                    await msg.edit_original_message(content=content, embeds=embeds)
+                    fmsg = await self.bot.get_guild(msg.guild.id).get_channel(msg.channel.id).fetch_message(msg.id)
+                    await fmsg.edit(content=content, embeds=embeds)
                 except discord.NotFound:
                     # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
                     self.bot.logger.info("remove message subscriber. message.id: %s", msg.id)
@@ -65,7 +66,7 @@ class TLVideoCog(commands.Cog):
             for em in err_msgs:
                 msgs.remove(em)
 
-    @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ")
+    @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(2時間毎に更新)")
     async def ListTLVideosCommand(
         self,
         ctx: Context,
@@ -77,11 +78,13 @@ class TLVideoCog(commands.Cog):
             boss = config.boss_names[boss_idx]
             if self.cached_embeds[boss_idx] == ():
                 content = f"TL動画リスト: {boss}\r\n次の定期更新までお待ちください。"
-                msg = await ctx.respond(content)
+                interact: discord.Interaction = await ctx.respond(content)
+                msg = await interact.original_message()
                 self.subsc_msgs[boss_idx].append(msg)
             else:
                 content, embeds = self.cached_embeds[boss_idx]
-                msg = await ctx.respond(content, embeds=embeds)
+                interact: discord.Interaction = await ctx.respond(content, embeds=embeds)
+                msg = await interact.original_message()
                 self.subsc_msgs[boss_idx].append(msg)
         else:
             await ctx.respond("環境変数の設定が正しくされていません。(BOSS_NAMES, YOUTUBE_API_KEY)", ephemeral=True)
@@ -102,7 +105,7 @@ def timedelta_color(delta: timedelta) -> discord.Colour:
     elif delta.seconds > 7200:
         return discord.Colour.yellow()
     elif delta.seconds >= 0:
-        return discord.Colour.yellow()
+        return discord.Colour.red()
     else:
         return discord.Colour.dark_purple()
 
