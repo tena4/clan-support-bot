@@ -34,11 +34,12 @@ class TLVideoCog(commands.Cog):
 
     @tasks.loop(hours=2.0)
     async def scheduled_tl_search(self):
-        self.bot.logger.debug("run scheduled tl search")
+        self.bot.logger.info("run scheduled tl search")
         for i, msgs in enumerate(self.subsc_msgs):
             boss = config.boss_names[i]
             query = f"{boss}+5段階目+万"
             try:
+                self.bot.logger.debug(f'youtube search. query: "{query}"')
                 videos = youtube_search(query)
             except HttpError as e:
                 self.bot.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
@@ -95,7 +96,7 @@ def setup(bot):
     bot.add_cog(TLVideoCog(bot))
 
 
-def timedelta_color(delta: timedelta):
+def timedelta_color(delta: timedelta) -> discord.Colour:
     if delta.days > 0:
         return discord.Colour.green()
     elif delta.seconds > 7200:
@@ -149,7 +150,7 @@ def youtube_search(query: str) -> list[TLVideo]:
             part="id,snippet",
             publishedAfter=published_after.isoformat() + "Z",
             order="relevance",
-            maxResults=20,
+            maxResults=30,
         )
         .execute()
     )
