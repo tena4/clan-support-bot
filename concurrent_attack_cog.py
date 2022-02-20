@@ -7,6 +7,7 @@ import app_config
 import re
 from main import BotClass
 from logging import Logger
+import postgres_helper as pg
 
 config = app_config.Config()
 
@@ -66,8 +67,12 @@ class ConcurrentAttackCog(commands.Cog):
     ):
         self.bot.logger.info("call concurrent attack command. author.id: %s", ctx.author.id)
         navigator = ConcurrentAttackButtonView(self.bot.logger)
-        boss_hp = hp if hp is not None else config.boss_hps[boss_num - 1]
-        await ctx.respond(f"{boss_num}ボス 残りHP(万):{boss_hp}\r\n------", view=navigator)
+        boss = pg.get_boss_info(boss_num)
+        if boss is None:
+            await ctx.respond(f"{boss_num}ボス情報が登録されていません。", ephemeral=True)
+            return
+        boss_hp = hp if hp is not None else boss.hp
+        await ctx.respond(f"{boss.number}:{boss.name} 残りHP(万):{boss_hp}\r\n------", view=navigator)
 
     @ConcurrentAttackCommand.error
     async def ConcurrentAttackCommand_error(self, ctx: Context, error):
