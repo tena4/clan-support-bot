@@ -3,7 +3,7 @@ import app_config
 import logging
 
 
-config = app_config.Config()
+config = app_config.Config.get_instance()
 
 
 class BotClass(discord.Bot):

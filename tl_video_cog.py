@@ -14,7 +14,7 @@ import postgres_helper as pg
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
 
-config = app_config.Config()
+config = app_config.Config.get_instance()
 
 
 class TLVideoCog(commands.Cog):
@@ -24,23 +24,25 @@ class TLVideoCog(commands.Cog):
         self.bot = bot
         self.task_count = 0
         self.msg = None
-        self.enabled = config.youtube_api_key != ""
+        self.enabled = len(config.youtube_api_keys) > 0
         if self.enabled:
+            self.get_api_key = select_api_key()
             self.cached_embeds: dict[int, (str, list[discord.Embed])] = {i: () for i in range(1, 6)}
             self.scheduled_tl_search.start()
 
     def cog_unload(self):
         self.scheduled_tl_search.cancel()
 
-    @tasks.loop(hours=2.0)
+    @tasks.loop(minutes=30.0)
     async def scheduled_tl_search(self):
         self.bot.logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
         for boss in bosses:
             query = f"{boss.name}+5段階目+万"
+            api_key = self.get_api_key()
             try:
                 self.bot.logger.debug(f'youtube search. query: "{query}"')
-                videos = youtube_search(query)
+                videos = youtube_search(query, api_key)
             except HttpError as e:
                 self.bot.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
                 break
@@ -151,8 +153,20 @@ def create_video_embed(video: TLVideo, updated_at: datetime) -> discord.Embed:
     return embed
 
 
-def youtube_search(query: str) -> list[TLVideo]:
-    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=config.youtube_api_key)
+def select_api_key():
+    cnt = 0
+
+    def key_next():
+        nonlocal cnt
+        idx = cnt % len(config.youtube_api_keys)
+        cnt += 1
+        return config.youtube_api_keys[idx]
+
+    return key_next
+
+
+def youtube_search(query: str, api_key: str) -> list[TLVideo]:
+    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
     published_after = datetime.now() - timedelta(days=14.0)
 
     # Call the search.list method to retrieve results matching the specified

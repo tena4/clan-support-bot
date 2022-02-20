@@ -6,7 +6,7 @@ import app_config
 from main import BotClass
 import postgres_helper as pg
 
-config = app_config.Config()
+config = app_config.Config.get_instance()
 
 
 class DBCog(commands.Cog):

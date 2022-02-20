@@ -7,7 +7,7 @@ import app_config
 from main import BotClass
 import re
 
-config = app_config.Config()
+config = app_config.Config.get_instance()
 BASE_SECONDS = 90
 
 

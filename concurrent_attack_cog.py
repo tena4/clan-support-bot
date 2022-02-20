@@ -9,7 +9,7 @@ from main import BotClass
 from logging import Logger
 import postgres_helper as pg
 
-config = app_config.Config()
+config = app_config.Config.get_instance()
 
 
 class ConcurrentAttackButtonView(discord.ui.View):
