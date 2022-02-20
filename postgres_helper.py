@@ -26,7 +26,7 @@ def get_boss_info(number: int) -> BossInfo:
 def get_bosses_info() -> list[BossInfo]:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT number, name, hp FROM boss_info;")
+            cur.execute("SELECT number, name, hp FROM boss_info ORDER BY number ASC;")
             records = cur.fetchall()
             bosses = [BossInfo(num, name, hp) for num, name, hp in records]
             return bosses

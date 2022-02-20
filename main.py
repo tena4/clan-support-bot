@@ -41,4 +41,5 @@ if __name__ == "__main__":
     bot.load_extension("fun_cog")
     bot.load_extension("tl_cog")
     bot.load_extension("tl_video_cog")
+    bot.load_extension("db_cog")
     bot.run(config.bot_token)
