@@ -75,7 +75,7 @@ class TLVideoCog(commands.Cog):
             for em in err_msgs:
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
 
-    @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(2時間毎に更新)")
+    @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     async def ListTLVideosCommand(
         self,
         ctx: Context,
