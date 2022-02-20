@@ -8,7 +8,7 @@ import os
 from main import BotClass
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-config = app_config.Config()
+config = app_config.Config.get_instance()
 
 
 class FunCog(commands.Cog):
