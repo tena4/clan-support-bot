@@ -117,16 +117,20 @@ def timedelta_color(delta: timedelta) -> discord.Colour:
         return discord.Colour.green()
     elif delta.seconds > 7200:
         return discord.Colour.yellow()
-    elif delta.seconds >= 0:
+    elif delta.seconds > 1800:
         return discord.Colour.red()
+    elif delta.seconds >= 0:
+        return discord.Colour.purple()
     else:
-        return discord.Colour.dark_purple()
+        return discord.Colour.light_grey()
 
 
 class TLVideo:
     def __init__(self, youtube_item) -> None:
         self.title = youtube_item["snippet"]["title"]
         self.vid = youtube_item["id"]["videoId"]
+        self.description = youtube_item["snippet"]["description"]
+        self.channel_title = youtube_item["snippet"]["channelTitle"]
         self.published_at = datetime.fromisoformat(youtube_item["snippet"]["publishedAt"].replace("Z", "+00:00"))
         self.thumbnail_url = youtube_item["snippet"]["thumbnails"]["default"]["url"]
         self.damage = self.__get_damage()
@@ -135,9 +139,9 @@ class TLVideo:
         return f"https://www.youtube.com/watch?v={self.vid}"
 
     def __get_damage(self):
-        ext_dmgs = re.findall(r"\d+万", self.title)
+        ext_dmgs = re.findall(r"\d[,\d]+万", self.title)
         if len(ext_dmgs) > 0:
-            return max([int(d.rstrip("万")) for d in ext_dmgs])
+            return max([int(re.sub("[,万]", "", d)) for d in ext_dmgs])
         else:
             return -1
 
@@ -145,10 +149,15 @@ class TLVideo:
 def create_video_embed(video: TLVideo, updated_at: datetime) -> discord.Embed:
     pub_at_jp = video.published_at.astimezone(timezone(timedelta(hours=9)))
     pub_at_jp_str = pub_at_jp.strftime("%Y/%m/%d %H:%M:%S")
-    embed = discord.Embed(title=video.title, color=timedelta_color(updated_at - pub_at_jp))
+    embed = discord.Embed(
+        title=video.title,
+        url=video.url(),
+        color=timedelta_color(updated_at - pub_at_jp),
+    )
     embed.add_field(name="ダメージ", value=f"{video.damage}万")
-    embed.add_field(name="URL", value=video.url())
-    embed.add_field(name="投稿日時", value=f"{pub_at_jp_str}")
+    embed.add_field(name="チャンネル", value=video.channel_title)
+    embed.add_field(name="投稿日時", value=pub_at_jp_str)
+    embed.set_footer(text=video.description)
     embed.set_thumbnail(url=video.thumbnail_url)
     return embed
 
@@ -177,7 +186,8 @@ def youtube_search(query: str, api_key: str) -> list[TLVideo]:
             q=query,
             part="id,snippet",
             publishedAfter=published_after.isoformat() + "Z",
-            order="relevance",
+            order="date",
+            type="video",
             maxResults=30,
         )
         .execute()
