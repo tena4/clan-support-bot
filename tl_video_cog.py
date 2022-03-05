@@ -47,7 +47,17 @@ class TLVideoCog(commands.Cog):
                 self.bot.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
                 break
 
-            videos = [v for v in videos if re.search(boss.name, v.title) is not None and v.damage > 0]
+            other_boss_names = [b.name for b in bosses if b != boss]
+            boss_regex = re.compile(boss.name)
+            ignore_boss_regex = re.compile("|".join(other_boss_names))
+            videos = [
+                v
+                for v in videos
+                if boss_regex.search(v.title) is not None
+                and ignore_boss_regex.search(v.title) is None
+                and v.damage > 0
+            ]
+
             videos.sort(key=lambda x: x.damage, reverse=True)
             updated_at = datetime.now(timezone(timedelta(hours=9)))
             updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
@@ -60,8 +70,12 @@ class TLVideoCog(commands.Cog):
             err_msgs = []
             for msg in subsc_msgs:
                 try:
-                    guild = await self.bot.fetch_guild(msg.guild_id)
-                    channel = await guild.fetch_channel(msg.channel_id)
+                    guild = self.bot.get_guild(msg.guild_id)
+                    if guild is None:
+                        guild = await self.bot.fetch_guild(msg.guild_id)
+                    channel = guild.get_channel(msg.channel_id)
+                    if channel is None:
+                        channel = await guild.fetch_channel(msg.channel_id)
                     fmsg = await channel.fetch_message(msg.message_id)
 
                     await fmsg.edit(content=content, embeds=embeds)
