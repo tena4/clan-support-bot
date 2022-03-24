@@ -4,6 +4,7 @@ from discord.ext import commands
 from discord.ext.commands.context import Context
 from discord.ui import InputText, Modal
 import app_config
+from logging import Logger
 from main import BotClass
 import re
 
@@ -35,24 +36,58 @@ class TLConvertModal(Modal):
             tl = self.children[0].value
             start_seconds = int(self.children[1].value)
             conv_tl = change_time(tl, start_seconds)
-            await interaction.response.send_message(content=f"TL秒数変換結果: {start_seconds}秒開始\r\n```c\r\n{conv_tl}```")
+            await interaction.response.send_message(
+                content=f"TL秒数変換結果: {start_seconds}秒開始\r\n```c\r\n{conv_tl}```", ephemeral=True
+            )
         else:
             await interaction.response.send_message("開始秒数の入力エラー", ephemeral=True)
+
+
+class TLLauncherView(discord.ui.View):
+    def __init__(self, _logger: Logger):
+        # making None is important if you want the button work after restart!
+        super().__init__(timeout=None)
+        self.logger = _logger
+
+    @discord.ui.button(style=discord.ButtonStyle.blurple, label="秒数変換", custom_id="tl_conv")
+    async def TLConvertButton(self, button, interaction: discord.Interaction):
+        self.logger.debug("push tl convert button. user.id: %s", interaction.user.id)
+        modal = TLConvertModal()
+        await interaction.response.send_modal(modal)
 
 
 class TLCog(commands.Cog):
     def __init__(self, bot: BotClass):
         self.bot = bot
 
-    @slash_command(guild_ids=config.guild_ids, name="tl", description="TLの秒数変換をする")
+    @slash_command(guild_ids=config.guild_ids, name="tl_conv", description="TLの秒数変換")
     async def TLConvertCommand(self, ctx: Context):
-        self.bot.logger.info("call tl command. author.id: %s", ctx.author.id)
+        self.bot.logger.info("call tl convert command. author.id: %s", ctx.author.id)
         modal = TLConvertModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLConvertCommand.error
     async def TLConvertCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("tl command error: {%s}", error)
+        self.bot.logger.error("tl convert command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="tl_launcher", description="TLコマンドのランチャーを設置")
+    async def TLLauncherCommand(self, ctx: Context):
+        self.bot.logger.info("call tl launcher command. author.id: %s", ctx.author.id)
+        navigator = TLLauncherView(self.bot.logger)
+        embed = discord.Embed(title="TL変換ランチャー")
+        embed.add_field(
+            name="秒数変換",
+            value=(
+                "TLの秒数を指定した開始秒数に応じて変換する。\r\n"
+                "元のTLは90秒開始想定としており、70秒と指定すれば20秒差し引かれた秒数に変換される。また120秒と指定すれば30秒足された秒数に変換される。"
+            ),
+        )
+        await ctx.respond(embed=embed, view=navigator)
+
+    @TLLauncherCommand.error
+    async def TLLauncherCommand_error(self, ctx: Context, error):
+        self.bot.logger.error("tl launcher command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
