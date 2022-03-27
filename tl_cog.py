@@ -5,7 +5,6 @@ from discord.ext.commands.context import Context
 from discord.ui import InputText, Modal
 import app_config
 from logging import Logger
-from main import BotClass
 import re
 import char
 
@@ -83,35 +82,36 @@ class TLLauncherView(discord.ui.View):
 
 
 class TLCog(commands.Cog):
-    def __init__(self, bot: BotClass):
+    def __init__(self, bot):
         self.bot = bot
+        self.logger: Logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="tl_conv", description="TLの秒数変換")
     async def TLConvertCommand(self, ctx: Context):
-        self.bot.logger.info("call tl convert command. author.id: %s", ctx.author.id)
+        self.logger.info("call tl convert command. author.id: %s", ctx.author.id)
         modal = TLConvertModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLConvertCommand.error
     async def TLConvertCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("tl convert command error: {%s}", error)
+        self.logger.error("tl convert command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_fmt", description="TLのフォーマット変換")
     async def TLFormatCommand(self, ctx: Context):
-        self.bot.logger.info("call tl format command. author.id: %s", ctx.author.id)
+        self.logger.info("call tl format command. author.id: %s", ctx.author.id)
         modal = TLFormatModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLFormatCommand.error
     async def TLFormatCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("tl format command error: {%s}", error)
+        self.logger.error("tl format command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_launcher", description="TLコマンドのランチャーを設置")
     async def TLLauncherCommand(self, ctx: Context):
-        self.bot.logger.info("call tl launcher command. author.id: %s", ctx.author.id)
-        navigator = TLLauncherView(self.bot.logger)
+        self.logger.info("call tl launcher command. author.id: %s", ctx.author.id)
+        navigator = TLLauncherView(self.logger)
         embed = discord.Embed(title="TL変換ランチャー")
         embed.add_field(
             name="秒数変換",
@@ -125,7 +125,7 @@ class TLCog(commands.Cog):
 
     @TLLauncherCommand.error
     async def TLLauncherCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("tl launcher command error: {%s}", error)
+        self.logger.error("tl launcher command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 

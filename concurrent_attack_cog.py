@@ -5,7 +5,6 @@ from discord.commands import Option
 from discord.ext.commands.context import Context
 import app_config
 import re
-from main import BotClass
 from logging import Logger
 import postgres_helper as pg
 
@@ -55,8 +54,9 @@ class ConcurrentAttackCog(commands.Cog):
     boss_num_desc = "ボスの番号"
     hp_desc = "ボスの残りHP(万)"
 
-    def __init__(self, bot: BotClass):
+    def __init__(self, bot):
         self.bot = bot
+        self.logger: Logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="concurrent_atk", description="同時凸のテンプレートを作成する")
     async def ConcurrentAttackCommand(
@@ -65,8 +65,8 @@ class ConcurrentAttackCog(commands.Cog):
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
         hp: Option(int, hp_desc, required=False, default=None),
     ):
-        self.bot.logger.info("call concurrent attack command. author.id: %s", ctx.author.id)
-        navigator = ConcurrentAttackButtonView(self.bot.logger)
+        self.logger.info("call concurrent attack command. author.id: %s", ctx.author.id)
+        navigator = ConcurrentAttackButtonView(self.logger)
         boss = pg.get_boss_info(boss_num)
         if boss is None:
             await ctx.respond(f"{boss_num}ボス情報が登録されていません。", ephemeral=True)
@@ -76,7 +76,7 @@ class ConcurrentAttackCog(commands.Cog):
 
     @ConcurrentAttackCommand.error
     async def ConcurrentAttackCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("concurrent attack command error: {%s}", error)
+        self.logger.error("concurrent attack command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 

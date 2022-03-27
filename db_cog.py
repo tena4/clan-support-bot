@@ -3,8 +3,8 @@ from discord.commands import slash_command, Option
 from discord.ext import commands
 from discord.ext.commands.context import Context
 import app_config
-from main import BotClass
 import postgres_helper as pg
+from logging import Logger
 
 config = app_config.Config.get_instance()
 
@@ -14,8 +14,9 @@ class DBCog(commands.Cog):
     name_desc = "ボスの名前"
     hp_desc = "ボスのHP(万)"
 
-    def __init__(self, bot: BotClass):
+    def __init__(self, bot):
         self.bot = bot
+        self.logger: Logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="set_boss", description="ボス情報の登録")
     @commands.is_owner()
@@ -26,7 +27,7 @@ class DBCog(commands.Cog):
         name: Option(str, name_desc),
         hp: Option(int, hp_desc),
     ):
-        self.bot.logger.info("call set boss command. author.id: %s", ctx.author.id)
+        self.logger.info("call set boss command. author.id: %s", ctx.author.id)
         pg.set_boss_info(boss_num, name, hp)
         boss = pg.get_boss_info(boss_num)
         if boss is None:
@@ -37,13 +38,13 @@ class DBCog(commands.Cog):
 
     @SetBossCommand.error
     async def SetBossCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("set boss command error: {%s}", error)
+        self.logger.error("set boss command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="get_bosses", description="ボス情報の参照")
     @commands.is_owner()
     async def GetBossesCommand(self, ctx: Context):
-        self.bot.logger.info("call get bosses command. author.id: %s", ctx.author.id)
+        self.logger.info("call get bosses command. author.id: %s", ctx.author.id)
         bosses = pg.get_bosses_info()
         embed = discord.Embed(title="ボス情報一覧")
         for boss in bosses:
@@ -52,7 +53,7 @@ class DBCog(commands.Cog):
 
     @GetBossesCommand.error
     async def GetBossesCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("get bosses command error: {%s}", error)
+        self.logger.error("get bosses command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
