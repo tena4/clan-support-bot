@@ -7,6 +7,7 @@ import app_config
 from logging import Logger
 from main import BotClass
 import re
+import char
 
 config = app_config.Config.get_instance()
 BASE_SECONDS = 90
@@ -43,6 +44,25 @@ class TLConvertModal(Modal):
             await interaction.response.send_message("開始秒数の入力エラー", ephemeral=True)
 
 
+class TLFormatModal(Modal):
+    def __init__(self) -> None:
+        super().__init__("TLフォーマット変換")
+
+        self.add_item(
+            InputText(
+                label="TL (公式フォーマット)",
+                placeholder="TL本文を貼り付けて下さい",
+                style=discord.InputTextStyle.long,
+                max_length=4000,
+            )
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        tl = self.children[0].value
+        fmt_tl = change_format(tl)
+        await interaction.response.send_message(content=f"TLフォーマット変換結果\r\n```c\r\n{fmt_tl}```", ephemeral=True)
+
+
 class TLLauncherView(discord.ui.View):
     def __init__(self, _logger: Logger):
         # making None is important if you want the button work after restart!
@@ -69,6 +89,17 @@ class TLCog(commands.Cog):
     @TLConvertCommand.error
     async def TLConvertCommand_error(self, ctx: Context, error):
         self.bot.logger.error("tl convert command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="tl_fmt", description="TLのフォーマット変換")
+    async def TLFormatCommand(self, ctx: Context):
+        self.bot.logger.info("call tl format command. author.id: %s", ctx.author.id)
+        modal = TLFormatModal()
+        await ctx.interaction.response.send_modal(modal)
+
+    @TLFormatCommand.error
+    async def TLFormatCommand_error(self, ctx: Context, error):
+        self.bot.logger.error("tl format command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_launcher", description="TLコマンドのランチャーを設置")
@@ -128,3 +159,32 @@ def str_time_mm(seconds):
         minutes = -seconds // 60
         partial_seconds = -seconds % 60
         return f"-{minutes:02}:{partial_seconds:02}"
+
+
+def change_format(src_tl: str) -> str:
+    fmt_tl = ""
+    now_time = ""
+    re_time = re.compile(r"^0[01]:\d{2}")
+    re_ignore = re.compile(r"^バトル日時|^◆ユニオンバースト発動時間")
+    for line in src_tl.splitlines():
+        time_matchs = re_time.match(line)
+        ignore_matchs = re_ignore.match(line)
+        if time_matchs is not None:
+            char_name = line.split(" ")[1]
+
+            if char.is_boss(char_name):
+                fmt_tl += "\n----- " + time_matchs[0][1:] + " ボスUB -----\n\n"
+            else:
+                if now_time == time_matchs[0][1:]:
+                    fmt_tl += "    > "
+                else:
+                    fmt_tl += time_matchs[0][1:] + " "
+                fmt_tl += " ".join(line.split(" ")[1:]) + "\n"
+            now_time = time_matchs[0][1:]
+
+        elif ignore_matchs is not None:
+            fmt_tl += "\n"
+        else:
+            fmt_tl += line + "\n"
+
+    return fmt_tl
