@@ -48,9 +48,9 @@ class AttarckReportCog(commands.Cog):
     def __init__(self, bot: BotClass):
         self.bot = bot
 
-    @slash_command(guild_ids=config.guild_ids, name="report_build", description="TLの秒数変換")
+    @slash_command(guild_ids=config.guild_ids, name="report_make", description="凸完了報告メッセージを作成")
     async def AttackReportCommand(self, ctx: Context):
-        self.bot.logger.info("call attack report command. author.id: %s", ctx.author.id)
+        self.bot.logger.info("call attack report make command. author.id: %s", ctx.author.id)
         navigator = AttarckReportView(self.bot.logger)
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="-----")
@@ -59,7 +59,7 @@ class AttarckReportCog(commands.Cog):
 
     @AttackReportCommand.error
     async def AttackReportCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("attack report command error: {%s}", error)
+        self.bot.logger.error("attack report make command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
