@@ -4,7 +4,6 @@ from discord.ext import commands
 from discord.ext.commands.context import Context
 import app_config
 from logging import Logger
-from main import BotClass
 
 config = app_config.Config.get_instance()
 
@@ -45,13 +44,14 @@ class AttarckReportView(discord.ui.View):
 
 
 class AttarckReportCog(commands.Cog):
-    def __init__(self, bot: BotClass):
+    def __init__(self, bot):
         self.bot = bot
+        self.logger: Logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="report_make", description="凸完了報告メッセージを作成")
     async def AttackReportCommand(self, ctx: Context):
-        self.bot.logger.info("call attack report make command. author.id: %s", ctx.author.id)
-        navigator = AttarckReportView(self.bot.logger)
+        self.logger.info("call attack report make command. author.id: %s", ctx.author.id)
+        navigator = AttarckReportView(self.logger)
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="-----")
         embed.add_field(name="凸完人数", value="0")
@@ -59,7 +59,7 @@ class AttarckReportCog(commands.Cog):
 
     @AttackReportCommand.error
     async def AttackReportCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("attack report make command error: {%s}", error)
+        self.logger.error("attack report make command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 

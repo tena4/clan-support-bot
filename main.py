@@ -1,7 +1,8 @@
 import discord
 import app_config
 import logging
-
+from attack_report_cog import AttarckReportView
+from tl_cog import TLLauncherView
 
 config = app_config.Config.get_instance()
 
@@ -18,6 +19,8 @@ class BotClass(discord.Bot):
 
             # You can add <discord.ui.View> classes to the <commands.Bot.add_view> to make it work after restart
             # self.add_view(<discord.ui.View>)
+            self.add_view(AttarckReportView(self.logger))
+            self.add_view(TLLauncherView(self.logger))
 
             self.logger.info(f"Connected as {self.user} with ID {self.user.id}")
             self.logger.info("------")

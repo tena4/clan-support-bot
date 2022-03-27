@@ -7,8 +7,8 @@ from discord.commands import slash_command, Option
 from discord.ext import tasks, commands
 from discord.ext.commands.context import Context
 import app_config
-from main import BotClass
 import re
+from logging import Logger
 import postgres_helper as pg
 
 YOUTUBE_API_SERVICE_NAME = "youtube"
@@ -20,8 +20,9 @@ config = app_config.Config.get_instance()
 class TLVideoCog(commands.Cog):
     boss_num_desc = "ボスの番号"
 
-    def __init__(self, bot: BotClass):
+    def __init__(self, bot):
         self.bot = bot
+        self.logger: Logger = bot.logger
         self.task_count = 0
         self.msg = None
         self.enabled = len(config.youtube_api_keys) > 0
@@ -35,16 +36,16 @@ class TLVideoCog(commands.Cog):
 
     @tasks.loop(minutes=30.0)
     async def scheduled_tl_search(self):
-        self.bot.logger.info("run scheduled tl search")
+        self.logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
         for boss in bosses:
             query = f"{boss.name}+5段階目+万"
             api_key = self.get_api_key()
             try:
-                self.bot.logger.debug(f'youtube search. query: "{query}"')
+                self.logger.debug(f'youtube search. query: "{query}"')
                 videos = youtube_search(query, api_key)
             except HttpError as e:
-                self.bot.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
+                self.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
                 break
 
             other_boss_names = [b.name for b in bosses if b != boss]
@@ -81,10 +82,10 @@ class TLVideoCog(commands.Cog):
                     await fmsg.edit(content=content, embeds=embeds)
                 except discord.NotFound:
                     # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
-                    self.bot.logger.info("remove message subscriber. message.id: %s", msg.message_id)
+                    self.logger.info("remove message subscriber. message.id: %s", msg.message_id)
                     err_msgs.append(msg)
                 except HTTPException as e:
-                    self.bot.logger.error("error edit subscribe message. message.id: %s. error: %s", msg.message_id, e)
+                    self.logger.error("error edit subscribe message. message.id: %s. error: %s", msg.message_id, e)
 
             for em in err_msgs:
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
@@ -95,7 +96,7 @@ class TLVideoCog(commands.Cog):
         ctx: Context,
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
     ):
-        self.bot.logger.info("call list tl videos command. author.id: %s", ctx.author.id)
+        self.logger.info("call list tl videos command. author.id: %s", ctx.author.id)
         if not self.enabled:
             await ctx.respond("環境変数の設定が正しくされていません。(YOUTUBE_API_KEY)", ephemeral=True)
             return
@@ -118,7 +119,7 @@ class TLVideoCog(commands.Cog):
 
     @ListTLVideosCommand.error
     async def ListTLVideosCommand_error(self, ctx: Context, error):
-        self.bot.logger.error("list tl videos command error: {%s}", error)
+        self.logger.error("list tl videos command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
