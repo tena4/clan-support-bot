@@ -3,6 +3,7 @@ import app_config
 import logging
 from attack_report_cog import AttarckReportView
 from tl_cog import TLLauncherView
+import postgres_helper as pg
 
 config = app_config.Config.get_instance()
 
@@ -37,6 +38,8 @@ if __name__ == "__main__":
     logger.addHandler(handler)
 
     logger.debug(config)
+
+    pg.db_init()
 
     bot = BotClass(logger)
 
