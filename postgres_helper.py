@@ -9,7 +9,32 @@ SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id
 
 def get_connection():
     dsn = config.database_url
-    return psycopg2.connect(dsn, sslmode="require")
+    conn = psycopg2.connect(dsn, sslmode="require")
+    conn.autocommit = True
+    return conn
+
+
+def db_init():
+    with get_connection() as conn:
+        __create_boss_info_table(conn)
+        __create_list_tl_subscribe(conn)
+
+
+def __create_boss_info_table(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            ("CREATE TABLE IF NOT EXISTS boss_info (number integer PRIMARY KEY, name varchar(64), hp integer);")
+        )
+
+
+def __create_list_tl_subscribe(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            (
+                "CREATE TABLE IF NOT EXISTS list_tl_subscribe"
+                "(guild_id bigint, channel_id bigint, message_id bigint, boss_number integer);"
+            )
+        )
 
 
 def get_boss_info(number: int) -> BossInfo:
