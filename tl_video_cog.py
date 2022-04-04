@@ -39,7 +39,7 @@ class TLVideoCog(commands.Cog):
         self.logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
         for boss in bosses:
-            query = f"{boss.name}+5段階目+万"
+            query = f"{boss.name}+5段階目"
             api_key = self.get_api_key()
             try:
                 self.logger.debug(f'youtube search. query: "{query}"')
@@ -144,7 +144,7 @@ class TLVideo:
     def __init__(self, youtube_item) -> None:
         self.title = youtube_item["snippet"]["title"]
         self.vid = youtube_item["id"]["videoId"]
-        self.description = youtube_item["snippet"]["description"]
+        self.description = self.__shortening_description(youtube_item["snippet"]["description"])
         self.channel_title = youtube_item["snippet"]["channelTitle"]
         self.published_at = datetime.fromisoformat(youtube_item["snippet"]["publishedAt"].replace("Z", "+00:00"))
         self.thumbnail_url = youtube_item["snippet"]["thumbnails"]["default"]["url"]
@@ -154,11 +154,14 @@ class TLVideo:
         return f"https://www.youtube.com/watch?v={self.vid}"
 
     def __get_damage(self):
-        ext_dmgs = re.findall(r"\d[,\d]+万", self.title)
+        ext_dmgs = re.findall(r"\d[,\d]{1,2}\d{2,}(?!年)", self.title)
         if len(ext_dmgs) > 0:
-            return max([int(re.sub("[,万]", "", d)) for d in ext_dmgs])
+            return max([int(re.sub("[,]", "", d)) for d in ext_dmgs])
         else:
             return -1
+
+    def __shortening_description(self, desc):
+        return re.sub(r"https://discordapp.com/channels/[/\d]+", "https://discordapp.com/channels/...", desc)
 
 
 def create_video_embed(video: TLVideo, updated_at: datetime) -> discord.Embed:
