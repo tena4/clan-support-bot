@@ -27,7 +27,8 @@ class TLConvertModal(Modal):
         self.add_item(
             InputText(
                 label="開始秒数",
-                value="90",
+                value=f"{BASE_SECONDS}",
+                max_length=3,
             )
         )
 
