@@ -1,9 +1,13 @@
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 import discord
+from http.client import HTTPException
 from discord.commands import slash_command
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ext.commands.context import Context
 import app_config
 from logging import Logger
+import postgres_helper as pg
 
 config = app_config.Config.get_instance()
 
@@ -44,11 +48,85 @@ class AttarckReportView(discord.ui.View):
 
 
 class AttarckReportCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: discord.Bot):
         self.bot = bot
         self.logger: Logger = bot.logger
+        self.scheduled_create_report.start()
 
-    @slash_command(guild_ids=config.guild_ids, name="report_make", description="凸完了報告メッセージを作成")
+    def cog_unload(self):
+        self.scheduled_create_report.cancel()
+
+    @tasks.loop(time=time(hour=20, minute=0))
+    async def scheduled_create_report(self):
+        self.logger.info("run scheduled create report")
+        now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+        cbs = pg.get_clan_battle_schedule()
+        if cbs is None:
+            return
+        elif now_date >= cbs.start_date and now_date <= cbs.end_date:
+            day_index = (now_date - cbs.start_date).days
+            reglist = pg.get_attack_report_register_list()
+            err_channels = []
+            for reg in reglist:
+                if reg.last_published < now_date:
+                    try:
+                        guild = self.bot.get_guild(reg.guild_id)
+                        if guild is None:
+                            guild = await self.bot.fetch_guild(reg.guild_id)
+                        channel = guild.get_channel(reg.channel_id)
+                        if channel is None:
+                            channel = await guild.fetch_channel(reg.channel_id)
+                        navigator = AttarckReportView(self.logger)
+                        embed = discord.Embed(title="凸完了報告")
+                        embed.add_field(name="3凸完了", value="-----")
+                        embed.add_field(name="凸完人数", value="0")
+                        await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
+
+                    except discord.NotFound:
+                        # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
+                        self.logger.info("remove attack report register. channel.id: %s", reg.channel_id)
+                        err_channels.append(reg)
+                    except HTTPException as e:
+                        self.logger.error("error create attack report. channel.id: %s. error: %s", reg.channel_id, e)
+                    else:
+                        pg.set_attack_report_register(reg.guild_id, reg.channel_id, now_date)
+
+            for err_ch in err_channels:
+                pg.remove_attack_report_register(err_ch.guild_id, cbs.channel_id)
+
+    @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する")
+    async def AttackReportAutoRegisterCommand(self, ctx: Context):
+        self.logger.info("call attack report make auto register command. author.id: %s", ctx.author.id)
+        reglist = pg.get_attack_report_register_list()
+        reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
+        if reg is None:
+            pg.set_attack_report_register(ctx.guild.id, ctx.channel.id, date(2020, 1, 1))
+            await ctx.respond("このチャンネルに凸完了報告表の自動作成を登録しました")
+        else:
+            await ctx.respond("このチャンネルに凸完了報告表の自動作成は既に登録されています", ephemeral=True)
+
+    @AttackReportAutoRegisterCommand.error
+    async def AttackReportAutoRegisterCommand_error(self, ctx: Context, error):
+        self.logger.error("attack report make auto register command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_unregister", description="凸完了報告表の自動作成の登録を解除する")
+    async def AttackReportAutoUnregisterCommand(self, ctx: Context):
+        self.logger.info("call attack report make auto unregister command. author.id: %s", ctx.author.id)
+        reglist = pg.get_attack_report_register_list()
+        reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
+        if reg is not None:
+            pg.remove_attack_report_register(ctx.guild.id, ctx.channel.id)
+            await ctx.respond("このチャンネルに登録されていた凸完了報告表の自動作成を解除しました")
+        else:
+            await ctx.respond("このチャンネルに凸完了報告表の自動作成は登録されていません", ephemeral=True)
+
+    @AttackReportAutoUnregisterCommand.error
+    async def AttackReportAutoUnregisterCommand_error(self, ctx: Context, error):
+        self.logger.error("attack report make auto unregister command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="atk_report_make", description="凸完了報告表を作成")
     async def AttackReportCommand(self, ctx: Context):
         self.logger.info("call attack report make command. author.id: %s", ctx.author.id)
         navigator = AttarckReportView(self.logger)
