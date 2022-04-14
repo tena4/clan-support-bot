@@ -1,53 +1,31 @@
-import discord
 import app_config
 import logging
-from attack_report_cog import AttarckReportView
-from tl_cog import TLLauncherView
 import postgres_helper as pg
+from mybot import BotClass
+from cogs.attack_report_cog import AttarckReportView
+from cogs.tl_cog import TLLauncherView
 
 config = app_config.Config.get_instance()
 
+log_lv_map = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARN": logging.WARN, "ERROR": logging.ERROR}
 
-class BotClass(discord.Bot):
-    def __init__(self, _logger: logging.Logger):
-        super().__init__()
-        self.persistent_views_added = False
-        self.logger = _logger
+logger = logging.getLogger("discord")
+logger.setLevel(log_lv_map[config.log_level])
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s"))
+logger.addHandler(handler)
 
-    # For making the intreaction Button works even after restart.
-    async def on_ready(self):
-        if not self.persistent_views_added:
+logger.debug(config)
 
-            # You can add <discord.ui.View> classes to the <commands.Bot.add_view> to make it work after restart
-            # self.add_view(<discord.ui.View>)
-            self.add_view(AttarckReportView(self.logger))
-            self.add_view(TLLauncherView(self.logger))
+pg.db_init()
 
-            self.logger.info(f"Connected as {self.user} with ID {self.user.id}")
-            self.logger.info("------")
-            self.persistent_views_added = True
+bot = BotClass(logger, [AttarckReportView, TLLauncherView])
 
-
-if __name__ == "__main__":
-    log_lv_map = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARN": logging.WARN, "ERROR": logging.ERROR}
-
-    logger = logging.getLogger("discord")
-    logger.setLevel(log_lv_map[config.log_level])
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s"))
-    logger.addHandler(handler)
-
-    logger.debug(config)
-
-    pg.db_init()
-
-    bot = BotClass(logger)
-
-    bot.load_extension("concurrent_attack_cog")
-    bot.load_extension("fun_cog")
-    bot.load_extension("tl_cog")
-    bot.load_extension("tl_video_cog")
-    bot.load_extension("db_cog")
-    bot.load_extension("manage_cog")
-    bot.load_extension("attack_report_cog")
-    bot.run(config.bot_token)
+bot.load_extension("cogs.concurrent_attack_cog")
+bot.load_extension("cogs.fun_cog")
+bot.load_extension("cogs.tl_cog")
+bot.load_extension("cogs.tl_video_cog")
+bot.load_extension("cogs.db_cog")
+bot.load_extension("cogs.manage_cog")
+bot.load_extension("cogs.attack_report_cog")
+bot.run(config.bot_token)

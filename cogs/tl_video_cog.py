@@ -5,11 +5,10 @@ from googleapiclient.errors import HttpError
 import discord
 from discord.commands import slash_command, Option
 from discord.ext import tasks, commands
-from discord.ext.commands.context import Context
 import app_config
 import re
-from logging import Logger
 import postgres_helper as pg
+from mybot import BotClass
 
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
@@ -20,9 +19,9 @@ config = app_config.Config.get_instance()
 class TLVideoCog(commands.Cog):
     boss_num_desc = "ボスの番号"
 
-    def __init__(self, bot):
+    def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger: Logger = bot.logger
+        self.logger = bot.logger
         self.task_count = 0
         self.msg = None
         self.enabled = len(config.youtube_api_keys) > 0
@@ -93,7 +92,7 @@ class TLVideoCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     async def ListTLVideosCommand(
         self,
-        ctx: Context,
+        ctx: discord.ApplicationContext,
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
     ):
         self.logger.info("call list tl videos command. author.id: %s", ctx.author.id)
@@ -118,7 +117,7 @@ class TLVideoCog(commands.Cog):
             pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number)
 
     @ListTLVideosCommand.error
-    async def ListTLVideosCommand_error(self, ctx: Context, error):
+    async def ListTLVideosCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("list tl videos command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 

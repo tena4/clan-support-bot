@@ -1,23 +1,22 @@
 import discord
 from discord.commands import slash_command
 from discord.ext import commands
-from discord.ext.commands.context import Context
 import app_config
 import random
 import os
-from logging import Logger
+from mybot import BotClass
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.getcwd()
 config = app_config.Config.get_instance()
 
 
 class FunCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger: Logger = bot.logger
+        self.logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="roll", description="サイコロを振る")
-    async def RollCommand(self, ctx: Context):
+    async def RollCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call roll command. author.id: %s", ctx.author.id)
         result = random.randint(1, 6)
         img_filename = f"sai{result}.png"
@@ -29,12 +28,12 @@ class FunCog(commands.Cog):
         await ctx.respond(embed=embed, file=file)
 
     @RollCommand.error
-    async def RollCommand_error(self, ctx: Context, error):
+    async def RollCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("roll command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="flip", description="コインを投げる")
-    async def FlipCommand(self, ctx: Context):
+    async def FlipCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call flip command. author.id: %s", ctx.author.id)
         result = "heads" if random.randint(0, 1) == 0 else "tails"
         img_filename = f"coin_{result}.png"
@@ -46,7 +45,7 @@ class FunCog(commands.Cog):
         await ctx.respond(embed=embed, file=file)
 
     @FlipCommand.error
-    async def FlipCommand_error(self, ctx: Context, error):
+    async def FlipCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("flip command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
