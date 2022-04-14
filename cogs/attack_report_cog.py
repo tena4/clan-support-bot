@@ -4,10 +4,10 @@ import discord
 from http.client import HTTPException
 from discord.commands import slash_command
 from discord.ext import commands, tasks
-from discord.ext.commands.context import Context
 import app_config
 from logging import Logger
 import postgres_helper as pg
+from mybot import BotClass
 
 config = app_config.Config.get_instance()
 
@@ -48,9 +48,9 @@ class AttarckReportView(discord.ui.View):
 
 
 class AttarckReportCog(commands.Cog):
-    def __init__(self, bot: discord.Bot):
+    def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger: Logger = bot.logger
+        self.logger = bot.logger
         self.scheduled_create_report.start()
 
     def cog_unload(self):
@@ -95,7 +95,7 @@ class AttarckReportCog(commands.Cog):
                 pg.remove_attack_report_register(err_ch.guild_id, cbs.channel_id)
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する")
-    async def AttackReportAutoRegisterCommand(self, ctx: Context):
+    async def AttackReportAutoRegisterCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call attack report make auto register command. author.id: %s", ctx.author.id)
         reglist = pg.get_attack_report_register_list()
         reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
@@ -106,12 +106,12 @@ class AttarckReportCog(commands.Cog):
             await ctx.respond("このチャンネルに凸完了報告表の自動作成は既に登録されています", ephemeral=True)
 
     @AttackReportAutoRegisterCommand.error
-    async def AttackReportAutoRegisterCommand_error(self, ctx: Context, error):
+    async def AttackReportAutoRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("attack report make auto register command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_unregister", description="凸完了報告表の自動作成の登録を解除する")
-    async def AttackReportAutoUnregisterCommand(self, ctx: Context):
+    async def AttackReportAutoUnregisterCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call attack report make auto unregister command. author.id: %s", ctx.author.id)
         reglist = pg.get_attack_report_register_list()
         reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
@@ -122,12 +122,12 @@ class AttarckReportCog(commands.Cog):
             await ctx.respond("このチャンネルに凸完了報告表の自動作成は登録されていません", ephemeral=True)
 
     @AttackReportAutoUnregisterCommand.error
-    async def AttackReportAutoUnregisterCommand_error(self, ctx: Context, error):
+    async def AttackReportAutoUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("attack report make auto unregister command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_make", description="凸完了報告表を作成")
-    async def AttackReportCommand(self, ctx: Context):
+    async def AttackReportCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call attack report make command. author.id: %s", ctx.author.id)
         navigator = AttarckReportView(self.logger)
         embed = discord.Embed(title="凸完了報告")
@@ -136,7 +136,7 @@ class AttarckReportCog(commands.Cog):
         await ctx.respond(embed=embed, view=navigator)
 
     @AttackReportCommand.error
-    async def AttackReportCommand_error(self, ctx: Context, error):
+    async def AttackReportCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("attack report make command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 

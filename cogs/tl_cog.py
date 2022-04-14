@@ -1,12 +1,12 @@
 import discord
 from discord.commands import slash_command
 from discord.ext import commands
-from discord.ext.commands.context import Context
 from discord.ui import InputText, Modal
 import app_config
 from logging import Logger
 import re
 import char
+from mybot import BotClass
 
 config = app_config.Config.get_instance()
 BASE_SECONDS = 90
@@ -83,34 +83,34 @@ class TLLauncherView(discord.ui.View):
 
 
 class TLCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger: Logger = bot.logger
+        self.logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="tl_conv", description="TLの秒数変換")
-    async def TLConvertCommand(self, ctx: Context):
+    async def TLConvertCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call tl convert command. author.id: %s", ctx.author.id)
         modal = TLConvertModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLConvertCommand.error
-    async def TLConvertCommand_error(self, ctx: Context, error):
+    async def TLConvertCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("tl convert command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_fmt", description="TLのフォーマット変換")
-    async def TLFormatCommand(self, ctx: Context):
+    async def TLFormatCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call tl format command. author.id: %s", ctx.author.id)
         modal = TLFormatModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLFormatCommand.error
-    async def TLFormatCommand_error(self, ctx: Context, error):
+    async def TLFormatCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("tl format command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_launcher", description="TLコマンドのランチャーを設置")
-    async def TLLauncherCommand(self, ctx: Context):
+    async def TLLauncherCommand(self, ctx: discord.ApplicationContext):
         self.logger.info("call tl launcher command. author.id: %s", ctx.author.id)
         navigator = TLLauncherView(self.logger)
         embed = discord.Embed(title="TL変換ランチャー")
@@ -125,7 +125,7 @@ class TLCog(commands.Cog):
         await ctx.respond(embed=embed, view=navigator)
 
     @TLLauncherCommand.error
-    async def TLLauncherCommand_error(self, ctx: Context, error):
+    async def TLLauncherCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("tl launcher command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 

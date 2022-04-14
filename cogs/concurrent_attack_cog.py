@@ -2,12 +2,12 @@ import discord
 from discord.commands import slash_command
 from discord.ext import commands
 from discord.commands import Option
-from discord.ext.commands.context import Context
 import app_config
 import re
 from logging import Logger
 from typing import Optional
 import postgres_helper as pg
+from mybot import BotClass
 
 config = app_config.Config.get_instance()
 
@@ -61,14 +61,14 @@ class ConcurrentAttackCog(commands.Cog):
     boss_num_desc = "ボスの番号"
     hp_desc = "ボスの残りHP(万)"
 
-    def __init__(self, bot):
+    def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger: Logger = bot.logger
+        self.logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="concurrent_atk", description="同時凸のテンプレートを作成する")
     async def ConcurrentAttackCommand(
         self,
-        ctx: Context,
+        ctx: discord.ApplicationContext,
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
         hp: Option(int, hp_desc, required=False, default=None),
     ):
@@ -82,7 +82,7 @@ class ConcurrentAttackCog(commands.Cog):
         await ctx.respond(f"{boss.number}:{boss.name} 残りHP(万):{boss_hp}\r\n------", view=navigator)
 
     @ConcurrentAttackCommand.error
-    async def ConcurrentAttackCommand_error(self, ctx: Context, error):
+    async def ConcurrentAttackCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("concurrent attack command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
