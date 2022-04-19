@@ -80,14 +80,37 @@ class TLVideoCog(commands.Cog):
 
                     await fmsg.edit(content=content, embeds=embeds)
                 except discord.NotFound:
-                    # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
-                    self.logger.info("remove message subscriber. message.id: %s", msg.message_id)
                     err_msgs.append(msg)
                 except HTTPException as e:
                     self.logger.error("error edit subscribe message. message.id: %s. error: %s", msg.message_id, e)
 
             for em in err_msgs:
+                # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
+                self.logger.info("remove message subscriber. message.id: %s", em.message_id)
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
+
+            gotten_list = [g.video_id for g in pg.get_tl_video_gotten_list()]
+            yet_list = [create_video_embed(v, updated_at) for v in videos if v.vid not in gotten_list]
+            notify_list = pg.get_tl_video_notify_list()
+            err_msgs = []
+            for notify in notify_list:
+                try:
+                    guild = self.bot.get_guild(notify.guild_id)
+                    if guild is None:
+                        guild = await self.bot.fetch_guild(notify.guild_id)
+                    channel = guild.get_channel(notify.channel_id)
+                    if channel is None:
+                        channel = await guild.fetch_channel(notify.channel_id)
+                    await channel.send(embeds=yet_list[:10])
+                except discord.NotFound:
+                    err_msgs.append(msg)
+                except HTTPException as e:
+                    self.logger.error("error notify new tl video. channel.id: %s. error: %s", notify.channel_id, e)
+
+            for em in err_msgs:
+                # チャンネルがない(削除された)場合、ti_video_notifyから当チャンネルを外す
+                self.logger.info("remove tl video notify. channel.id: %s", em.channel_id)
+                pg.remove_tl_video_notify(em.guild_id, em.channel_id)
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     async def ListTLVideosCommand(
@@ -119,6 +142,36 @@ class TLVideoCog(commands.Cog):
     @ListTLVideosCommand.error
     async def ListTLVideosCommand_error(self, ctx: discord.ApplicationContext, error):
         self.logger.error("list tl videos command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_register", description="TL動画の新着通知を登録")
+    async def ListTLVideosNotifyRegisterCommand(self, ctx: discord.ApplicationContext):
+        self.logger.info("call list tl videos notify register command. author.id: %s", ctx.author.id)
+        notify_list = pg.get_tl_video_notify_list()
+        if pg.TLVideoNotify(ctx.guild_id, ctx.channel_id) not in notify_list:
+            pg.set_tl_video_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id)
+            return await ctx.respond("通知登録しました。")
+        else:
+            return await ctx.respond("既に登録されています。", ephemeral=True)
+
+    @ListTLVideosNotifyRegisterCommand.error
+    async def ListTLVideosNotifyRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        self.logger.error("list tl videos notify register command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_unregister", description="TL動画の新着通知を登録")
+    async def ListTLVideosNotifyUnregisterCommand(self, ctx: discord.ApplicationContext):
+        self.logger.info("call list tl videos notify unregister command. author.id: %s", ctx.author.id)
+        notify_list = pg.get_tl_video_notify_list()
+        if pg.TLVideoNotify(ctx.guild_id, ctx.channel_id) in notify_list:
+            pg.remove_tl_video_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id)
+            return await ctx.respond("通知登録を解除しました。")
+        else:
+            return await ctx.respond("登録されていません。", ephemeral=True)
+
+    @ListTLVideosNotifyUnregisterCommand.error
+    async def ListTLVideosNotifyUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        self.logger.error("list tl videos notify unregister command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
