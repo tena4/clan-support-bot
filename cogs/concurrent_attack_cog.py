@@ -4,6 +4,8 @@ from discord.ext import commands
 from discord.commands import Option
 import app_config
 import re
+import itertools
+import math
 from logging import Logger
 from typing import Optional
 import postgres_helper as pg
@@ -60,6 +62,7 @@ class ConcurrentAttackButtonView(discord.ui.View):
 class ConcurrentAttackCog(commands.Cog):
     boss_num_desc = "ボスの番号"
     hp_desc = "ボスの残りHP(万)"
+    dmg_desc = "ダメージ(万)"
 
     def __init__(self, bot: BotClass):
         self.bot = bot
@@ -86,6 +89,53 @@ class ConcurrentAttackCog(commands.Cog):
         self.logger.error("concurrent attack command error: {%s}", error)
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
+    @slash_command(guild_ids=config.guild_ids, name="carry_over", description="同時凸時の持ち越し時間の算出")
+    async def CalcCarryOverTimeCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        hp: Option(int, hp_desc, required=True),
+        dmg1: Option(int, dmg_desc, required=True),
+        dmg2: Option(int, dmg_desc, required=False, default=None),
+        dmg3: Option(int, dmg_desc, required=False, default=None),
+        dmg4: Option(int, dmg_desc, required=False, default=None),
+    ):
+        self.logger.info("call calc carry over time command. author.id: %s", ctx.author.id)
+        input_dmgs = [dmg1]
+        if dmg2 is not None:
+            input_dmgs.append(dmg2)
+        if dmg3 is not None:
+            input_dmgs.append(dmg3)
+        if dmg4 is not None:
+            input_dmgs.append(dmg4)
+
+        resluts = calc_carry_over_permutations(hp, input_dmgs)
+        resluts.sort(key=lambda x: x[0], reverse=True)
+        resluts_str = ["```c"]
+        for co, dmgs in resluts:
+            dmgs_str = " -> ".join([str(dmg) for t, dmg in dmgs if t != "off"])
+
+            rst_str = f"持越: {co}秒 = {dmgs_str}"
+            if co >= 20:
+                rst_str += "(LA)"
+                through_dmgs = [str(dmg) for t, dmg in dmgs if t == "off"]
+                through_dmgs.sort()
+                if through_dmgs:
+                    through_dmgs_str = ", ".join(through_dmgs)
+                    rst_str += f" --- 流し: {through_dmgs_str}"
+            else:
+                rst_str += "(未討伐)"
+            if rst_str not in resluts_str:
+                resluts_str.append(rst_str)
+        resluts_str.append("```")
+        embed = discord.Embed(title="持ち越し時間算出")
+        embed.add_field(name=f"残りボスHP(万):{hp}", value="\n".join(resluts_str))
+        await ctx.respond(embed=embed)
+
+    @CalcCarryOverTimeCommand.error
+    async def CalcCarryOverTimeCommand_error(self, ctx: discord.ApplicationContext, error):
+        self.logger.error("calc carry over time command error: {%s}", error)
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
 
 def setup(bot):
     bot.add_cog(ConcurrentAttackCog(bot))
@@ -96,3 +146,27 @@ def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str])
     if repl_atk is not None:
         repl_atk_list.append(f"{repl_atk}  {username}")
     return repl_atk_list
+
+
+def calc_carry_over_permutations(hp: int, input_dmgs: list[int]) -> list[tuple]:
+    resluts = []
+    for choice_dmgs in itertools.permutations(input_dmgs):
+        calc_hp = hp
+        calc_dmgs = []
+        carry_over = 0
+        for dmg in choice_dmgs:
+            if calc_hp - dmg > 0:
+                calc_hp -= dmg
+                calc_dmgs.append(("th", dmg))
+            elif calc_hp > 0:
+                calc_hp -= dmg
+                carry_over = math.ceil(((-calc_hp) / dmg) * 90 + 20)
+                if carry_over > 90:
+                    carry_over = 90
+                calc_dmgs.sort(key=lambda d: d[1], reverse=True)
+                calc_dmgs.append(("la", dmg))
+            else:
+                calc_dmgs.append(("off", dmg))
+        resluts.append((carry_over, calc_dmgs))
+
+    return resluts
