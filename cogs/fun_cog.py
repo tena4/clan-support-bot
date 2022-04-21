@@ -23,7 +23,7 @@ class FunCog(commands.Cog):
         sai_img_path = f"{ROOT_DIR}{os.sep}assets{os.sep}{img_filename}"
         file = discord.File(sai_img_path, filename=img_filename)
         embed = discord.Embed(title=f"dice roll : **{result}**", colour=discord.Colour.random())
-        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
         embed.set_image(url=f"attachment://{img_filename}")
         await ctx.respond(embed=embed, file=file)
 
@@ -40,7 +40,7 @@ class FunCog(commands.Cog):
         coin_img_path = f"{ROOT_DIR}{os.sep}assets{os.sep}{img_filename}"
         file = discord.File(coin_img_path, filename=img_filename)
         embed = discord.Embed(title=f"flip a coin : **{result}**", colour=discord.Colour.random())
-        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
         embed.set_image(url=f"attachment://{img_filename}")
         await ctx.respond(embed=embed, file=file)
 
