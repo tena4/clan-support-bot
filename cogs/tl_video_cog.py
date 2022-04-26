@@ -153,7 +153,7 @@ class TLVideo:
         return f"https://www.youtube.com/watch?v={self.vid}"
 
     def __get_damage(self):
-        ext_dmgs = re.findall(r"\d[,\d]{1,2}\d{2,}(?!年)", self.title)
+        ext_dmgs = re.findall(r"\d[,\d]{1,2}\d{2,}(?![年s])", self.title)
         if len(ext_dmgs) > 0:
             return max([int(re.sub("[,]", "", d)) for d in ext_dmgs])
         else:
@@ -205,7 +205,7 @@ def youtube_search(query: str, api_key: str) -> list[TLVideo]:
             publishedAfter=published_after.isoformat() + "Z",
             order="date",
             type="video",
-            maxResults=30,
+            maxResults=50,
         )
         .execute()
     )
