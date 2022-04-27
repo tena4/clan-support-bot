@@ -14,6 +14,41 @@ from mybot import BotClass
 config = app_config.Config.get_instance()
 
 
+class CancelUserSelect(discord.ui.Select):
+    def __init__(self, message: discord.Message):
+        atk_contents = message.content.splitlines()
+        usernames = [re.search("  .*$", atk).group().lstrip() for atk in atk_contents[2:]]
+        options = [discord.SelectOption(label=u) for u in usernames]
+
+        # The placeholder is what will be shown when no option is chosen
+        # The min and max values indicate we can only pick one of the three options
+        # The options parameter defines the dropdown options. We defined this above
+        super().__init__(
+            custom_id="proxy_cancel_attack_select",
+            placeholder="Choose your favourite colour...",
+            min_values=0,
+            max_values=len(options),
+            options=options,
+        )
+        self.message_id = message.id
+
+    async def callback(self, interaction: discord.Interaction):
+        refresh_message = await interaction.channel.fetch_message(self.message_id)
+        atk_contents = refresh_message.content.splitlines()
+        for uname in self.values:
+            atk_contents = replace_attacks(atk_contents, uname, None)
+        await refresh_message.edit(content="\r\n".join(atk_contents))
+        await interaction.response.send_message(
+            content="下記ユーザーの凸をキャンセルしました。\r\n{}".format("\r\n".join(self.values)), ephemeral=True
+        )
+
+
+class ProxyCancelView(discord.ui.View):
+    def __init__(self, message):
+        super().__init__(timeout=120)
+        self.add_item(CancelUserSelect(message))
+
+
 class ConcurrentAttackButtonView(discord.ui.View):
     def __init__(self, _logger: Logger):
         # making None is important if you want the button work after restart!
@@ -57,6 +92,20 @@ class ConcurrentAttackButtonView(discord.ui.View):
         atk_contents = interaction.message.content.splitlines()
         repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, None)
         await interaction.response.edit_message(content="\r\n".join(repl_atk_contents))
+
+    @discord.ui.button(style=discord.ButtonStyle.gray, label="代理キャンセル", custom_id="proxy_cancel_attack")
+    async def ProxyCancelAttackButton(self, button, interaction: discord.Interaction):
+        self.logger.debug("push proxy cancel attack button. user.id: %s", interaction.user.id)
+        pcview = ProxyCancelView(interaction.message)
+        resp_msg = await interaction.response.send_message(
+            content="キャンセルする凸のユーザーを選択して下さい(複数可)", view=pcview, ephemeral=True
+        )
+
+        async def child_view_timeout():
+            await resp_msg.edit_original_message(content="インタラクションがタイムアウトしました。本メッセージは削除して下さい。")
+            pcview.stop()
+
+        pcview.on_timeout = child_view_timeout
 
 
 class ConcurrentAttackCog(commands.Cog):
