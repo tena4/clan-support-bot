@@ -1,11 +1,12 @@
+import re
+from logging import Logger
+
+import app_config
+import char
 import discord
 from discord.commands import slash_command
 from discord.ext import commands
 from discord.ui import InputText, Modal
-import app_config
-from logging import Logger
-import re
-import char
 from mybot import BotClass
 
 config = app_config.Config.get_instance()
@@ -14,7 +15,7 @@ BASE_SECONDS = 90
 
 class TLConvertModal(Modal):
     def __init__(self) -> None:
-        super().__init__("TL秒数変換")
+        super().__init__(title="TL秒数変換")
 
         self.add_item(
             InputText(
@@ -38,7 +39,7 @@ class TLConvertModal(Modal):
             start_seconds = int(self.children[1].value)
             conv_tl = change_time(tl, start_seconds)
             await interaction.response.send_message(
-                content=f"TL秒数変換結果: {start_seconds}秒開始\r\n```c\r\n{conv_tl}```", ephemeral=True
+                content=f"TL秒数変換結果: {start_seconds}秒開始\n```c\n{conv_tl}```", ephemeral=True
             )
         else:
             await interaction.response.send_message("開始秒数の入力エラー", ephemeral=True)
@@ -46,7 +47,7 @@ class TLConvertModal(Modal):
 
 class TLFormatModal(Modal):
     def __init__(self) -> None:
-        super().__init__("TLフォーマット変換")
+        super().__init__(title="TLフォーマット変換")
 
         self.add_item(
             InputText(
@@ -60,7 +61,7 @@ class TLFormatModal(Modal):
     async def callback(self, interaction: discord.Interaction):
         tl = self.children[0].value
         fmt_tl = change_format(tl)
-        await interaction.response.send_message(content=f"TLフォーマット変換結果\r\n```c\r\n{fmt_tl}```", ephemeral=True)
+        await interaction.response.send_message(content=f"TLフォーマット変換結果\n```c\n{fmt_tl}```", ephemeral=True)
 
 
 class TLLauncherView(discord.ui.View):
@@ -130,8 +131,9 @@ class TLCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
-def setup(bot):
+def setup(bot: BotClass):
     bot.add_cog(TLCog(bot))
+    bot.persistent_view_classes.add(TLLauncherView)
 
 
 def change_time(tl: str, seconds: int) -> str:

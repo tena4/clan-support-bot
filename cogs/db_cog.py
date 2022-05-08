@@ -1,9 +1,10 @@
 from datetime import date
-import discord
-from discord.commands import slash_command, Option
-from discord.ext import commands
+
 import app_config
+import discord
 import postgres_helper as pg
+from discord.commands import Option, slash_command
+from discord.ext import commands
 from mybot import BotClass
 
 config = app_config.Config.get_instance()
@@ -100,5 +101,5 @@ class DBCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
-def setup(bot):
+def setup(bot: BotClass):
     bot.add_cog(DBCog(bot))
