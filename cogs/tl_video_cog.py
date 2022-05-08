@@ -1,13 +1,14 @@
-from datetime import datetime, timezone, timedelta
+import re
+from datetime import datetime, timedelta, timezone
 from http.client import HTTPException
+
+import app_config
+import discord
+import postgres_helper as pg
+from discord.commands import Option, slash_command
+from discord.ext import commands, tasks
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import discord
-from discord.commands import slash_command, Option
-from discord.ext import tasks, commands
-import app_config
-import re
-import postgres_helper as pg
 from mybot import BotClass
 
 YOUTUBE_API_SERVICE_NAME = "youtube"
@@ -61,7 +62,7 @@ class TLVideoCog(commands.Cog):
             videos.sort(key=lambda x: x.damage, reverse=True)
             updated_at = datetime.now(timezone(timedelta(hours=9)))
             updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
-            content = f"TL動画対象ボス: {boss.name}\r\n最終更新日時: {updated_at_str}\r\nヒット件数: {len(videos)}, ダメージ上位10件を表示"
+            content = f"TL動画対象ボス: {boss.name}\n最終更新日時: {updated_at_str}\nヒット件数: {len(videos)}, ダメージ上位10件を表示"
 
             embeds = [create_video_embed(v, updated_at) for v in videos[:10]]
             self.cached_embeds[boss.number] = (content, embeds)
@@ -106,7 +107,7 @@ class TLVideoCog(commands.Cog):
             return
 
         if self.cached_embeds[boss.number] == ():
-            content = f"TL動画リスト: {boss.name}\r\n次の定期更新までお待ちください。"
+            content = f"TL動画リスト: {boss.name}\n次の定期更新までお待ちください。"
             interact: discord.Interaction = await ctx.respond(content)
             msg = await interact.original_message()
             pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number)
@@ -122,7 +123,7 @@ class TLVideoCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
-def setup(bot):
+def setup(bot: BotClass):
     bot.add_cog(TLVideoCog(bot))
 
 

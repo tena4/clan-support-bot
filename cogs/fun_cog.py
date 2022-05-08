@@ -1,9 +1,10 @@
+import os
+import random
+
+import app_config
 import discord
 from discord.commands import slash_command
 from discord.ext import commands
-import app_config
-import random
-import os
 from mybot import BotClass
 
 ROOT_DIR = os.getcwd()
@@ -50,5 +51,5 @@ class FunCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
-def setup(bot):
+def setup(bot: BotClass):
     bot.add_cog(FunCog(bot))
