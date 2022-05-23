@@ -1,7 +1,9 @@
 from collections import namedtuple
-import psycopg2
-import app_config
 from datetime import date
+
+import psycopg2
+
+import app_config
 
 config = app_config.Config.get_instance()
 BossInfo = namedtuple("BossInfo", ("number", "name", "hp"))
