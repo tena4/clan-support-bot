@@ -1,3 +1,4 @@
+import asyncio
 import re
 from datetime import datetime, timedelta, timezone
 from http.client import HTTPException
@@ -70,6 +71,7 @@ class TLVideoCog(commands.Cog):
             subsc_msgs = pg.get_subsc_messages(boss.number)
             err_msgs = []
             for msg in subsc_msgs:
+                asyncio.sleep(1)
                 try:
                     guild = self.bot.get_guild(msg.guild_id)
                     if guild is None:
@@ -91,10 +93,15 @@ class TLVideoCog(commands.Cog):
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
 
             gotten_list = [g.video_id for g in pg.get_tl_video_gotten_list()]
-            yet_list = [create_video_embed(v, updated_at) for v in videos if v.vid not in gotten_list]
+            yet_list = [v for v in videos if v.vid not in gotten_list]
+            if len(yet_list) == 0:
+                continue
+            notice_video_embeds = [create_video_embed(v, updated_at) for v in yet_list]
+            pg.set_tl_video_gotten_list([v.vid for v in yet_list])
             notify_list = pg.get_tl_video_notify_list()
             err_msgs = []
             for notify in notify_list:
+                asyncio.sleep(1)
                 try:
                     guild = self.bot.get_guild(notify.guild_id)
                     if guild is None:
@@ -102,7 +109,7 @@ class TLVideoCog(commands.Cog):
                     channel = guild.get_channel(notify.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(notify.channel_id)
-                    await channel.send(embeds=yet_list[:10])
+                    await channel.send(embeds=notice_video_embeds[:10])
                 except discord.NotFound:
                     err_msgs.append(msg)
                 except HTTPException as e:

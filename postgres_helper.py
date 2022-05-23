@@ -2,6 +2,7 @@ from collections import namedtuple
 from datetime import date
 
 import psycopg2
+from psycopg2 import extras
 
 import app_config
 
@@ -248,10 +249,12 @@ def get_tl_video_gotten_list() -> list[TLVideoGotten]:
             return gotten_list
 
 
-def set_tl_video_gotten(video_id: str):
+def set_tl_video_gotten_list(video_ids: list[str]):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                ("INSERT INTO tl_video_gotten (video_id)" "VALUES (%s) "),
-                (video_id),
+            insert_values = [(id,) for id in video_ids]
+            extras.execute_values(
+                cur,
+                ("INSERT INTO tl_video_gotten (video_id) VALUES %s;"),
+                (insert_values),
             )
