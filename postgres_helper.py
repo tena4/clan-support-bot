@@ -2,6 +2,7 @@ from collections import namedtuple
 from datetime import date
 
 import psycopg2
+from psycopg2 import extras
 
 import app_config
 
@@ -10,6 +11,8 @@ BossInfo = namedtuple("BossInfo", ("number", "name", "hp"))
 SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id", "boss_number"))
 AttacReportRegister = namedtuple("AttacReportRegister", ("guild_id", "channel_id", "last_published"))
 ClanBattleSchedule = namedtuple("ClanBattleSchedule", ("start_date", "end_date"))
+TLVideoNotify = namedtuple("TLVideoNotify", ("guild_id", "channel_id"))
+TLVideoGotten = namedtuple("TLVideoGotten", ("video_id"))
 
 
 def get_connection():
@@ -25,6 +28,8 @@ def db_init():
         __create_list_tl_subscribe(conn)
         __create_attack_report_register(conn)
         __create_clan_battle_schedule(conn)
+        __create_tl_video_notify(conn)
+        __create_tl_video_gotten(conn)
 
 
 def __create_boss_info_table(conn):
@@ -62,6 +67,21 @@ def __create_clan_battle_schedule(conn):
                 "(id integer PRIMARY KEY, start_date date, end_date date);"
             )
         )
+
+
+def __create_tl_video_notify(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            (
+                "CREATE TABLE IF NOT EXISTS tl_video_notify"
+                "(guild_id bigint, channel_id bigint, PRIMARY KEY (guild_id, channel_id));"
+            )
+        )
+
+
+def __create_tl_video_gotten(conn):
+    with conn.cursor() as cur:
+        cur.execute(("CREATE TABLE IF NOT EXISTS tl_video_gotten" "(video_id varchar(32) PRIMARY KEY);"))
 
 
 def get_boss_info(number: int) -> BossInfo:
@@ -190,4 +210,51 @@ def set_clan_battle_schedule(start_date: date, end_date: date):
                     "DO UPDATE SET start_date = %s, end_date = %s;"
                 ),
                 (start_ds, end_ds, start_ds, end_ds),
+            )
+
+
+def get_tl_video_notify_list() -> list[TLVideoNotify]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT guild_id, channel_id FROM tl_video_notify;")
+            records = cur.fetchall()
+            notify_list = [TLVideoNotify(record[0], record[1]) for record in records]
+            return notify_list
+
+
+def set_tl_video_notify(guild_id: int, channel_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                ("INSERT INTO tl_video_notify (guild_id, channel_id)" "VALUES (%s, %s) "),
+                (guild_id, channel_id),
+            )
+
+
+def remove_tl_video_notify(guild_id: int, channel_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                ("DELETE FROM tl_video_notify WHERE guild_id = %s AND channel_id = %s;"),
+                (guild_id, channel_id),
+            )
+
+
+def get_tl_video_gotten_list() -> list[TLVideoGotten]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT video_id FROM tl_video_gotten;")
+            records = cur.fetchall()
+            gotten_list = [TLVideoGotten(record[0]) for record in records]
+            return gotten_list
+
+
+def set_tl_video_gotten_list(video_ids: list[str]):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            insert_values = [(id,) for id in video_ids]
+            extras.execute_values(
+                cur,
+                ("INSERT INTO tl_video_gotten (video_id) VALUES %s;"),
+                (insert_values),
             )
