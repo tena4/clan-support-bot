@@ -188,6 +188,7 @@ class ConcurrentAttackCog(commands.Cog):
 
 def setup(bot: BotClass):
     bot.add_cog(ConcurrentAttackCog(bot))
+    bot.persistent_view_classes.add(ConcurrentAttackButtonView)
 
 
 def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
