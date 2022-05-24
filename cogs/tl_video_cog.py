@@ -93,11 +93,14 @@ class TLVideoCog(commands.Cog):
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
 
             gotten_list = [g.video_id for g in pg.get_tl_video_gotten_list()]
-            yet_list = [v for v in videos if v.vid not in gotten_list]
+            yet_list = [(i, v) for i, v in enumerate(videos) if v.vid not in gotten_list]
             if len(yet_list) == 0:
                 continue
-            notice_video_embeds = [create_video_embed(v, updated_at) for v in yet_list]
-            pg.set_tl_video_gotten_list([v.vid for v in yet_list])
+            notice_content = "TL動画対象ボス: {}\n通知時ダメージ順位: [{}]".format(
+                boss.name, ", ".join([f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list])
+            )
+            notice_video_embeds = [create_video_embed(v, updated_at) for _, v in yet_list]
+            pg.set_tl_video_gotten_list([v.vid for _, v in yet_list])
             notify_list = pg.get_tl_video_notify_list()
             err_msgs = []
             for notify in notify_list:
@@ -109,7 +112,7 @@ class TLVideoCog(commands.Cog):
                     channel = guild.get_channel(notify.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(notify.channel_id)
-                    await channel.send(embeds=notice_video_embeds[:10])
+                    await channel.send(content=notice_content, embeds=notice_video_embeds[:10])
                 except discord.NotFound:
                     err_msgs.append(msg)
                 except HTTPException as e:
