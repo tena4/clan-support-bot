@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import math
 import re
@@ -54,6 +55,18 @@ class ConcurrentAttackButtonView(discord.ui.View):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
         self.logger = _logger
+        self.replace_lock = asyncio.Lock()
+        self.cache_content = ""
+
+    async def sync_replace_content(self, src_content: str, username: str, repl_atk: Optional[str]) -> str:
+        async with self.replace_lock:
+            if self.cache_content != "" and src_content != self.cache_content:
+                src_content = self.cache_content
+            atk_contents = src_content.splitlines()
+            repl_atk_contents = replace_attacks(atk_contents, username, repl_atk)
+            self.cache_content = "\n".join(repl_atk_contents)
+            dst_content = self.cache_content
+        return dst_content
 
     # custom_id is required and should be unique for <commands.Bot.add_view>
     # attribute emoji can be used to include emojis which can be default str emoji or str(<:emojiName:int(ID)>)
@@ -63,43 +76,48 @@ class ConcurrentAttackButtonView(discord.ui.View):
     )
     async def NewPhysicsAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push new physics attack button. user.id: %s", interaction.user.id)
-        atk_contents = interaction.message.content.splitlines()
-        repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "　新凸　 物\N{Dagger Knife}")
-        await interaction.response.edit_message(content="\n".join(repl_atk_contents))
+        repl_content = await self.sync_replace_content(
+            interaction.message.content, interaction.user.display_name, "　新凸　 物\N{Dagger Knife}"
+        )
+        await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(
         style=discord.ButtonStyle.blurple, label="新凸:魔", emoji="\N{Star Of David}", custom_id="new_magic_attack"
     )
     async def NewMagicAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push new magic attack button. user.id: %s", interaction.user.id)
-        atk_contents = interaction.message.content.splitlines()
-        repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "　新凸　 魔\N{Star Of David}")
-        await interaction.response.edit_message(content="\n".join(repl_atk_contents))
+        repl_content = await self.sync_replace_content(
+            interaction.message.content, interaction.user.display_name, "　新凸　 魔\N{Star Of David}"
+        )
+        await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="持越:物", emoji="\N{Dagger Knife}", custom_id="carry_physics_attack"
     )
     async def CarryOverPhysicsAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push carry over physics attack button. user.id: %s", interaction.user.id)
-        atk_contents = interaction.message.content.splitlines()
-        repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "★持越★ 物\N{Dagger Knife}")
-        await interaction.response.edit_message(content="\n".join(repl_atk_contents))
+        repl_content = await self.sync_replace_content(
+            interaction.message.content, interaction.user.display_name, "★持越★ 物\N{Dagger Knife}"
+        )
+        await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="持越:魔", emoji="\N{Star Of David}", custom_id="carry_magic_attack"
     )
     async def CarryOverMagicAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push carry over magic attack button. user.id: %s", interaction.user.id)
-        atk_contents = interaction.message.content.splitlines()
-        repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "★持越★ 魔\N{Star Of David}")
-        await interaction.response.edit_message(content="\n".join(repl_atk_contents))
+        repl_content = await self.sync_replace_content(
+            interaction.message.content, interaction.user.display_name, "★持越★ 魔\N{Star Of David}"
+        )
+        await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="cancel_attack")
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push cancel attack button. user.id: %s", interaction.user.id)
-        atk_contents = interaction.message.content.splitlines()
-        repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, None)
-        await interaction.response.edit_message(content="\n".join(repl_atk_contents))
+        repl_content = await self.sync_replace_content(
+            interaction.message.content, interaction.user.display_name, None
+        )
+        await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="代理キャンセル", custom_id="proxy_cancel_attack")
     async def ProxyCancelAttackButton(self, button, interaction: discord.Interaction):
