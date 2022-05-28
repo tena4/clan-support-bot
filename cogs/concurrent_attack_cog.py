@@ -3,6 +3,7 @@ import itertools
 import math
 import re
 from logging import Logger
+from pyclbr import Function
 from typing import Optional
 
 import app_config
@@ -16,7 +17,7 @@ config = app_config.Config.get_instance()
 
 
 class CancelUserSelect(discord.ui.Select):
-    def __init__(self, message: discord.Message):
+    def __init__(self, message: discord.Message, replace_method: Function):
         atk_contents = message.content.splitlines()
         usernames = [re.search("  .* :$", atk).group().strip(" :") for atk in atk_contents[2:]]
         options = [discord.SelectOption(label=u) for u in usernames]
@@ -32,22 +33,23 @@ class CancelUserSelect(discord.ui.Select):
             options=options,
         )
         self.message_id = message.id
+        self.replace_function = replace_method
 
     async def callback(self, interaction: discord.Interaction):
         refresh_message = await interaction.channel.fetch_message(self.message_id)
-        atk_contents = refresh_message.content.splitlines()
-        for uname in self.values:
-            atk_contents = replace_attacks(atk_contents, uname, None)
-        await refresh_message.edit(content="\n".join(atk_contents))
+        repl_content = await self.replace_function(
+            self.message_id, interaction.channel, refresh_message.content, self.values, None
+        )
+        await refresh_message.edit(content=repl_content)
         await interaction.response.send_message(
             content="下記ユーザーの凸をキャンセルしました。\n{}".format("\n".join(self.values)), ephemeral=True
         )
 
 
 class ProxyCancelView(discord.ui.View):
-    def __init__(self, message):
+    def __init__(self, message, replace_method):
         super().__init__(timeout=120)
-        self.add_item(CancelUserSelect(message))
+        self.add_item(CancelUserSelect(message, replace_method))
 
 
 class ConcurrentAttackButtonView(discord.ui.View):
@@ -55,17 +57,33 @@ class ConcurrentAttackButtonView(discord.ui.View):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
         self.logger = _logger
-        self.replace_lock = asyncio.Lock()
-        self.cache_content = ""
+        self.lock_lock = asyncio.Lock()
+        self.replace_locks = {}
+        self.cache_contents = {}
 
-    async def sync_replace_content(self, src_content: str, username: str, repl_atk: Optional[str]) -> str:
-        async with self.replace_lock:
-            if self.cache_content != "" and src_content != self.cache_content:
-                src_content = self.cache_content
+    async def sync_replace_content(
+        self,
+        id: int,
+        channel: discord.PartialMessageable,
+        src_content: str,
+        usernames: list[str],
+        repl_atk: Optional[str],
+    ) -> str:
+        async with self.lock_lock:
+            lock = self.replace_locks.get(id)
+            if lock is None:
+                lock = asyncio.Lock()
+                self.replace_locks[id] = lock
+
+        async with lock:
+            cache_content = self.cache_contents.get(id)
+            if cache_content is not None and src_content != cache_content:
+                src_content = cache_content
             atk_contents = src_content.splitlines()
-            repl_atk_contents = replace_attacks(atk_contents, username, repl_atk)
-            self.cache_content = "\n".join(repl_atk_contents)
-            dst_content = self.cache_content
+            for username in usernames:
+                atk_contents = replace_attacks(atk_contents, username, repl_atk)
+            self.cache_contents[id] = "\n".join(atk_contents)
+            dst_content = self.cache_contents[id]
         return dst_content
 
     # custom_id is required and should be unique for <commands.Bot.add_view>
@@ -77,7 +95,11 @@ class ConcurrentAttackButtonView(discord.ui.View):
     async def NewPhysicsAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push new physics attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
-            interaction.message.content, interaction.user.display_name, "　新凸　 物\N{Dagger Knife}"
+            interaction.message.id,
+            interaction.channel,
+            interaction.message.content,
+            [interaction.user.display_name],
+            "　新凸　 物\N{Dagger Knife}",
         )
         await interaction.response.edit_message(content=repl_content)
 
@@ -87,7 +109,11 @@ class ConcurrentAttackButtonView(discord.ui.View):
     async def NewMagicAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push new magic attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
-            interaction.message.content, interaction.user.display_name, "　新凸　 魔\N{Star Of David}"
+            interaction.message.id,
+            interaction.channel,
+            interaction.message.content,
+            [interaction.user.display_name],
+            "　新凸　 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
 
@@ -97,7 +123,11 @@ class ConcurrentAttackButtonView(discord.ui.View):
     async def CarryOverPhysicsAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push carry over physics attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
-            interaction.message.content, interaction.user.display_name, "★持越★ 物\N{Dagger Knife}"
+            interaction.message.id,
+            interaction.channel,
+            interaction.message.content,
+            [interaction.user.display_name],
+            "★持越★ 物\N{Dagger Knife}",
         )
         await interaction.response.edit_message(content=repl_content)
 
@@ -107,7 +137,11 @@ class ConcurrentAttackButtonView(discord.ui.View):
     async def CarryOverMagicAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push carry over magic attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
-            interaction.message.content, interaction.user.display_name, "★持越★ 魔\N{Star Of David}"
+            interaction.message.id,
+            interaction.channel,
+            interaction.message.content,
+            [interaction.user.display_name],
+            "★持越★ 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
 
@@ -115,14 +149,18 @@ class ConcurrentAttackButtonView(discord.ui.View):
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push cancel attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
-            interaction.message.content, interaction.user.display_name, None
+            interaction.message.id,
+            interaction.channel,
+            interaction.message.content,
+            [interaction.user.display_name],
+            None,
         )
         await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="代理キャンセル", custom_id="proxy_cancel_attack")
     async def ProxyCancelAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push proxy cancel attack button. user.id: %s", interaction.user.id)
-        pcview = ProxyCancelView(interaction.message)
+        pcview = ProxyCancelView(interaction.message, self.sync_replace_content)
         resp_msg = await interaction.response.send_message(
             content="キャンセルする凸のユーザーを選択して下さい(複数可)", view=pcview, ephemeral=True
         )

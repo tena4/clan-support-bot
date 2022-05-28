@@ -5,9 +5,9 @@ name = "pypi"
 
 [packages]
 python-dotenv = "*"
-py-cord = {git = "https://github.com/Pycord-Development/pycord"}
 google-api-python-client = "*"
 psycopg2-binary = "*"
+py-cord = "==2.0.0rc1"
 
 [dev-packages]
 black = "*"
