@@ -17,7 +17,7 @@ config = app_config.Config.get_instance()
 class CancelUserSelect(discord.ui.Select):
     def __init__(self, message: discord.Message):
         atk_contents = message.content.splitlines()
-        usernames = [re.search("  .*$", atk).group().lstrip() for atk in atk_contents[2:]]
+        usernames = [re.search("  .* :$", atk).group().strip(" :") for atk in atk_contents[2:]]
         options = [discord.SelectOption(label=u) for u in usernames]
 
         # The placeholder is what will be shown when no option is chosen
