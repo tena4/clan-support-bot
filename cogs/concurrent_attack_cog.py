@@ -17,7 +17,7 @@ config = app_config.Config.get_instance()
 class CancelUserSelect(discord.ui.Select):
     def __init__(self, message: discord.Message):
         atk_contents = message.content.splitlines()
-        usernames = [re.search("  .*$", atk).group().lstrip() for atk in atk_contents[2:]]
+        usernames = [re.search("  .* :$", atk).group().strip(" :") for atk in atk_contents[2:]]
         options = [discord.SelectOption(label=u) for u in usernames]
 
         # The placeholder is what will be shown when no option is chosen
@@ -58,28 +58,36 @@ class ConcurrentAttackButtonView(discord.ui.View):
     # custom_id is required and should be unique for <commands.Bot.add_view>
     # attribute emoji can be used to include emojis which can be default str emoji or str(<:emojiName:int(ID)>)
     # timeout can be used if there is a timeout on the button interaction. Default timeout is set to 180.
-    @discord.ui.button(style=discord.ButtonStyle.blurple, label="新凸:物\N{Dagger Knife}", custom_id="new_physics_attack")
+    @discord.ui.button(
+        style=discord.ButtonStyle.blurple, label="新凸:物", emoji="\N{Dagger Knife}", custom_id="new_physics_attack"
+    )
     async def NewPhysicsAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push new physics attack button. user.id: %s", interaction.user.id)
         atk_contents = interaction.message.content.splitlines()
         repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "　新凸　 物\N{Dagger Knife}")
         await interaction.response.edit_message(content="\n".join(repl_atk_contents))
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, label="新凸:魔\N{Star Of David}", custom_id="new_magic_attack")
+    @discord.ui.button(
+        style=discord.ButtonStyle.blurple, label="新凸:魔", emoji="\N{Star Of David}", custom_id="new_magic_attack"
+    )
     async def NewMagicAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push new magic attack button. user.id: %s", interaction.user.id)
         atk_contents = interaction.message.content.splitlines()
         repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "　新凸　 魔\N{Star Of David}")
         await interaction.response.edit_message(content="\n".join(repl_atk_contents))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="持越:物\N{Dagger Knife}", custom_id="carry_physics_attack")
+    @discord.ui.button(
+        style=discord.ButtonStyle.green, label="持越:物", emoji="\N{Dagger Knife}", custom_id="carry_physics_attack"
+    )
     async def CarryOverPhysicsAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push carry over physics attack button. user.id: %s", interaction.user.id)
         atk_contents = interaction.message.content.splitlines()
         repl_atk_contents = replace_attacks(atk_contents, interaction.user.display_name, "★持越★ 物\N{Dagger Knife}")
         await interaction.response.edit_message(content="\n".join(repl_atk_contents))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="持越:魔\N{Star Of David}", custom_id="carry_magic_attack")
+    @discord.ui.button(
+        style=discord.ButtonStyle.green, label="持越:魔", emoji="\N{Star Of David}", custom_id="carry_magic_attack"
+    )
     async def CarryOverMagicAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push carry over magic attack button. user.id: %s", interaction.user.id)
         atk_contents = interaction.message.content.splitlines()
@@ -192,9 +200,9 @@ def setup(bot: BotClass):
 
 
 def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
-    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username}$", atk)]
+    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username} :$", atk)]
     if repl_atk is not None:
-        repl_atk_list.append(f"{repl_atk}  {username}")
+        repl_atk_list.append(f"{repl_atk}  {username} :")
     return repl_atk_list
 
 
