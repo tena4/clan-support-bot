@@ -14,6 +14,7 @@ from mybot import BotClass
 
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
+IGNORE_WORDS = ["Ark", "このファン", "コノファン"]
 
 config = app_config.Config.get_instance()
 
@@ -52,11 +53,13 @@ class TLVideoCog(commands.Cog):
             other_boss_names = [b.name for b in bosses if b != boss]
             boss_regex = re.compile(boss.name)
             ignore_boss_regex = re.compile("|".join(other_boss_names))
+            ignore_words_regex = re.compile("|".join(IGNORE_WORDS))
             videos = [
                 v
                 for v in videos
                 if boss_regex.search(v.title) is not None
                 and ignore_boss_regex.search(v.title) is None
+                and ignore_words_regex.search(v.title) is None
                 and v.damage > 0
             ]
 
