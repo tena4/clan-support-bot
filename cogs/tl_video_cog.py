@@ -258,7 +258,7 @@ def select_api_key():
     return key_next
 
 
-def youtube_search(query: str, api_key: str) -> list[TLVideo]:
+def youtube_search(query: str, api_key: str, page_token=None) -> list[TLVideo]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
     published_after = datetime.now() - timedelta(days=14.0)
 
@@ -273,6 +273,7 @@ def youtube_search(query: str, api_key: str) -> list[TLVideo]:
             order="date",
             type="video",
             maxResults=50,
+            pageToken=page_token,
         )
         .execute()
     )
@@ -280,5 +281,10 @@ def youtube_search(query: str, api_key: str) -> list[TLVideo]:
     videos = [
         TLVideo(result) for result in search_response.get("items", []) if result["id"]["kind"] == "youtube#video"
     ]
+
+    next_page_token = search_response.get("nextPageToken")
+    if next_page_token:
+        next_videos = youtube_search(token=next_page_token)
+        videos += next_videos
 
     return videos
