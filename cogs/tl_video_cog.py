@@ -71,7 +71,7 @@ class TLVideoCog(commands.Cog):
             subsc_msgs = pg.get_subsc_messages(boss.number)
             err_msgs = []
             for msg in subsc_msgs:
-                asyncio.sleep(1)
+                await asyncio.sleep(1)
                 try:
                     guild = self.bot.get_guild(msg.guild_id)
                     if guild is None:
@@ -104,7 +104,7 @@ class TLVideoCog(commands.Cog):
             notify_list = pg.get_tl_video_notify_list()
             err_msgs = []
             for notify in notify_list:
-                asyncio.sleep(1)
+                await asyncio.sleep(1)
                 try:
                     guild = self.bot.get_guild(notify.guild_id)
                     if guild is None:
