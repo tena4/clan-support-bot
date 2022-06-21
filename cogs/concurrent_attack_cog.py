@@ -11,12 +11,13 @@ import discord
 import postgres_helper as pg
 from discord.commands import Option, slash_command
 from discord.ext import commands
+from discord.ui import InputText, Modal, Select, View
 from mybot import BotClass
 
 config = app_config.Config.get_instance()
 
 
-class CancelUserSelect(discord.ui.Select):
+class CancelUserSelect(Select):
     def __init__(self, message: discord.Message, replace_method: Function):
         atk_contents = message.content.splitlines()
         usernames = [re.search("  .* :$", atk).group().strip(" :") for atk in atk_contents[2:]]
@@ -46,13 +47,22 @@ class CancelUserSelect(discord.ui.Select):
         )
 
 
-class ProxyCancelView(discord.ui.View):
+class ProxyCancelView(View):
     def __init__(self, message, replace_method):
         super().__init__(timeout=120)
         self.add_item(CancelUserSelect(message, replace_method))
 
 
-class ConcurrentAttackButtonView(discord.ui.View):
+class DamageModal(Modal):
+    def __init__(self, target_attack) -> None:
+        super().__init__(title="ダメージ入力")
+        self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(content=self.children[0].value)
+
+
+class ConcurrentAttackButtonView(View):
     def __init__(self, _logger: Logger):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
@@ -68,6 +78,7 @@ class ConcurrentAttackButtonView(discord.ui.View):
         src_content: str,
         usernames: list[str],
         repl_atk: Optional[str],
+        note: Optional[str] = None,
     ) -> str:
         async with self.lock_lock:
             lock = self.replace_locks.get(id)
@@ -81,7 +92,10 @@ class ConcurrentAttackButtonView(discord.ui.View):
                 src_content = cache_content
             atk_contents = src_content.splitlines()
             for username in usernames:
-                atk_contents = replace_attacks(atk_contents, username, repl_atk)
+                if note is None:
+                    atk_contents = replace_attacks(atk_contents, username, repl_atk)
+                else:
+                    atk_contents = add_note(atk_contents, username, note)
             self.cache_contents[id] = "\n".join(atk_contents)
             dst_content = self.cache_contents[id]
         return dst_content
@@ -144,6 +158,17 @@ class ConcurrentAttackButtonView(discord.ui.View):
             "★持越★ 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
+
+    @discord.ui.button(style=discord.ButtonStyle.secondary, label="ダメージ入力", custom_id="input_damage")
+    async def InputDamageButton(self, button, interaction: discord.Interaction):
+        atk_list = interaction.message.content.splitlines()
+        username = interaction.user.display_name
+        matches = [atk for atk in atk_list if re.match(rf".*\s{username} :$", atk)]
+        if len(matches) == 1:
+            modal = DamageModal(interaction.message, self.sync_replace_content)
+            await interaction.response.send_modal(modal)
+        else:
+            await interaction.response.send_message("対象凸がありません。", ephemeral=True)
 
     @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="cancel_attack")
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
@@ -256,10 +281,14 @@ def setup(bot: BotClass):
 
 
 def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
-    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username} :$", atk)]
+    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username} :.*", atk)]
     if repl_atk is not None:
         repl_atk_list.append(f"{repl_atk}  {username} :")
     return repl_atk_list
+
+
+def add_note(atk_list: list[str], username: str, note: str):
+    [atk for atk in atk_list if re.match(rf".*\s{username} :.*", atk)]
 
 
 def calc_carry_over_permutations(hp: int, input_dmgs: list[int]) -> list[tuple]:
