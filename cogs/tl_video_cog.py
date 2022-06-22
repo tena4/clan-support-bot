@@ -50,7 +50,7 @@ class TLVideoCog(commands.Cog):
                 self.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
                 break
 
-            other_boss_names = [b.name for b in bosses if b != boss]
+            other_boss_names = [b.name for b in bosses if b.name not in boss.name]
             boss_regex = re.compile(boss.name)
             ignore_boss_regex = re.compile("|".join(other_boss_names))
             ignore_words_regex = re.compile("|".join(IGNORE_WORDS))
@@ -260,7 +260,7 @@ def select_api_key():
 
 def youtube_search(query: str, api_key: str, page_token=None) -> list[TLVideo]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
-    published_after = datetime.now() - timedelta(days=14.0)
+    published_after = datetime.now() - timedelta(days=10.0)
 
     # Call the search.list method to retrieve results matching the specified
     # query term.
