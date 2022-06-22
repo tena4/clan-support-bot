@@ -89,6 +89,10 @@ class TLVideoCog(commands.Cog):
                     err_msgs.append(msg)
                 except HTTPException as e:
                     self.logger.error("error edit subscribe message. message.id: %s. error: %s", msg.message_id, e)
+                except Exception as e:
+                    self.logger.error(
+                        "unknown exceptions by edit subscribe message. message.id: %s. error: %s", msg.message_id, e
+                    )
 
             for em in err_msgs:
                 # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
@@ -120,6 +124,10 @@ class TLVideoCog(commands.Cog):
                     err_msgs.append(msg)
                 except HTTPException as e:
                     self.logger.error("error notify new tl video. channel.id: %s. error: %s", notify.channel_id, e)
+                except Exception as e:
+                    self.logger.error(
+                        "unknown exceptions by notify new tl video. message.id: %s. error: %s", msg.message_id, e
+                    )
 
             for em in err_msgs:
                 # チャンネルがない(削除された)場合、ti_video_notifyから当チャンネルを外す
