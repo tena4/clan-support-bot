@@ -41,6 +41,7 @@ class TLVideoCog(commands.Cog):
         self.logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
         for boss in bosses:
+            await asyncio.sleep(10)
             query = f"{boss.name}+5段階目"
             api_key = self.get_api_key()
             try:
@@ -133,8 +134,6 @@ class TLVideoCog(commands.Cog):
                 # チャンネルがない(削除された)場合、ti_video_notifyから当チャンネルを外す
                 self.logger.info("remove tl video notify. channel.id: %s", em.channel_id)
                 pg.remove_tl_video_notify(em.guild_id, em.channel_id)
-
-            await asyncio.sleep(10)
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     async def ListTLVideosCommand(
