@@ -2,23 +2,26 @@ import logging
 
 import app_config
 import postgres_helper as pg
+from log_formatter import CustomJsonFormatter
 from mybot import BotClass
 
 config = app_config.Config.get_instance()
 
 log_level_map = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARN": logging.WARN, "ERROR": logging.ERROR}
 
-logger = logging.getLogger("discord")
+logger = logging.getLogger()
 logger.setLevel(log_level_map[config.log_level])
 handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s"))
+formatter = CustomJsonFormatter("%(timestamp)s %(level)s %(name)s %(message)s")
+handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+logger.info("bot start")
 logger.debug(config)
 
 pg.db_init()
 
-bot = BotClass(logger)
+bot = BotClass()
 
 bot.load_extension("cogs.concurrent_attack_cog")
 bot.load_extension("cogs.fun_cog")

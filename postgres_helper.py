@@ -1,12 +1,15 @@
 from collections import namedtuple
 from datetime import date
+from logging import getLogger
 
 import psycopg2
 from psycopg2 import extras
 
 import app_config
 
+logger = getLogger(__name__)
 config = app_config.Config.get_instance()
+
 BossInfo = namedtuple("BossInfo", ("number", "name", "hp"))
 SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id", "boss_number"))
 AttacReportRegister = namedtuple("AttacReportRegister", ("guild_id", "channel_id", "last_published"))
@@ -16,10 +19,14 @@ TLVideoGotten = namedtuple("TLVideoGotten", ("video_id"))
 
 
 def get_connection():
-    dsn = config.database_url
-    conn = psycopg2.connect(dsn, sslmode="require")
-    conn.autocommit = True
-    return conn
+    try:
+        dsn = config.database_url
+        conn = psycopg2.connect(dsn, sslmode="require")
+        conn.autocommit = True
+        return conn
+    except Exception as e:
+        logger.error("Postgresql connection error", exc_info=True)
+        raise e
 
 
 def db_init():
