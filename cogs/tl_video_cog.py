@@ -41,6 +41,7 @@ class TLVideoCog(commands.Cog):
         self.logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
         for boss in bosses:
+            await asyncio.sleep(10)
             query = f"{boss.name}+5段階目"
             api_key = self.get_api_key()
             try:
