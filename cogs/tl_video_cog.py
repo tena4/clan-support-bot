@@ -79,9 +79,11 @@ class TLVideoCog(commands.Cog):
                     guild = self.bot.get_guild(msg.guild_id)
                     if guild is None:
                         guild = await self.bot.fetch_guild(msg.guild_id)
+                        await asyncio.sleep(1)
                     channel = guild.get_channel(msg.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(msg.channel_id)
+                        await asyncio.sleep(1)
                     fmsg = await channel.fetch_message(msg.message_id)
 
                     await fmsg.edit(content=content, embeds=embeds)
@@ -116,9 +118,11 @@ class TLVideoCog(commands.Cog):
                     guild = self.bot.get_guild(notify.guild_id)
                     if guild is None:
                         guild = await self.bot.fetch_guild(notify.guild_id)
+                        await asyncio.sleep(1)
                     channel = guild.get_channel(notify.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(notify.channel_id)
+                        await asyncio.sleep(1)
                     await channel.send(content=notice_content, embeds=notice_video_embeds[:10])
                 except discord.NotFound:
                     err_msgs.append(msg)
