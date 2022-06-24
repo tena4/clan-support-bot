@@ -8,6 +8,7 @@ python-dotenv = "*"
 google-api-python-client = "*"
 psycopg2-binary = "*"
 py-cord = "==2.0.0rc1"
+python-json-logger = "*"
 
 [dev-packages]
 black = "*"

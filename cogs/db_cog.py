@@ -1,4 +1,5 @@
 from datetime import date
+from logging import getLogger
 
 import app_config
 import discord
@@ -7,6 +8,7 @@ from discord.commands import Option, slash_command
 from discord.ext import commands
 from mybot import BotClass
 
+logger = getLogger(__name__)
 config = app_config.Config.get_instance()
 
 
@@ -19,7 +21,6 @@ class DBCog(commands.Cog):
 
     def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="set_boss", description="[admin]ボス情報の登録")
     @commands.is_owner()
@@ -30,7 +31,13 @@ class DBCog(commands.Cog):
         name: Option(str, name_desc),
         hp: Option(int, hp_desc),
     ):
-        self.logger.info("call set boss command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call set boss command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         pg.set_boss_info(boss_num, name, hp)
         boss = pg.get_boss_info(boss_num)
         if boss is None:
@@ -41,13 +48,26 @@ class DBCog(commands.Cog):
 
     @SetBossCommand.error
     async def SetBossCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("set boss command error: {%s}", error)
+        logger.error(
+            "set boss command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="get_bosses", description="[admin]ボス情報の参照")
     @commands.is_owner()
     async def GetBossesCommand(self, ctx: discord.ApplicationContext):
-        self.logger.info("call get bosses command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call get bosses command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         bosses = pg.get_bosses_info()
         embed = discord.Embed(title="ボス情報一覧")
         for boss in bosses:
@@ -56,7 +76,14 @@ class DBCog(commands.Cog):
 
     @GetBossesCommand.error
     async def GetBossesCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("get bosses command error: {%s}", error)
+        logger.error(
+            "get bosses command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="set_clan_battle_schedule", description="[admin]クランバトル開催期間の登録")
@@ -67,7 +94,13 @@ class DBCog(commands.Cog):
         start_date: Option(str, start_date_desc),
         end_date: Option(str, end_date_desc),
     ):
-        self.logger.info("call set clan battle schedule command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call set clan battle schedule command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         pg.set_clan_battle_schedule(start_date=date.fromisoformat(start_date), end_date=date.fromisoformat(end_date))
         schedule = pg.get_clan_battle_schedule()
         if schedule is None:
@@ -78,13 +111,26 @@ class DBCog(commands.Cog):
 
     @SetClanBattleScheduleCommand.error
     async def SetClanBattleScheduleCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("set clan battle schedule command error: {%s}", error)
+        logger.error(
+            "set clan battle schedule command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="get_clan_battle_schedule", description="[admin]クランバトル開催期間の参照")
     @commands.is_owner()
     async def GetClanBattleScheduleCommand(self, ctx: discord.ApplicationContext):
-        self.logger.info("call get clan battle schedule command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call get clan battle schedule command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         schedule = pg.get_clan_battle_schedule()
         embed = discord.Embed(title="クランバトル開催期間")
         if schedule is not None:
@@ -97,9 +143,17 @@ class DBCog(commands.Cog):
 
     @GetClanBattleScheduleCommand.error
     async def GetClanBattleScheduleCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("get clan battle schedule command error: {%s}", error)
+        logger.error(
+            "get clan battle schedule command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
 def setup(bot: BotClass):
+    logger.info("Load bot cog from %s", __name__)
     bot.add_cog(DBCog(bot))

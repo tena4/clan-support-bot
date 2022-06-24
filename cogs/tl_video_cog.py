@@ -2,6 +2,7 @@ import asyncio
 import re
 from datetime import datetime, timedelta, timezone
 from http.client import HTTPException
+from logging import getLogger
 
 import app_config
 import discord
@@ -12,11 +13,12 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from mybot import BotClass
 
+logger = getLogger(__name__)
+config = app_config.Config.get_instance()
+
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
 IGNORE_WORDS = ["Ark", "このファン", "コノファン"]
-
-config = app_config.Config.get_instance()
 
 
 class TLVideoCog(commands.Cog):
@@ -24,7 +26,6 @@ class TLVideoCog(commands.Cog):
 
     def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger = bot.logger
         self.task_count = 0
         self.msg = None
         self.enabled = len(config.youtube_api_keys) > 0
@@ -38,17 +39,17 @@ class TLVideoCog(commands.Cog):
 
     @tasks.loop(minutes=30.0)
     async def scheduled_tl_search(self):
-        self.logger.info("run scheduled tl search")
+        logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
         for boss in bosses:
             await asyncio.sleep(10)
             query = f"{boss.name}+5段階目"
             api_key = self.get_api_key()
             try:
-                self.logger.debug(f'youtube search. query: "{query}"')
+                logger.debug(f'youtube search. query: "{query}"')
                 videos = youtube_search(query, api_key)
             except HttpError as e:
-                self.logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
+                logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
                 break
 
             other_boss_names = [b.name for b in bosses if b.name not in boss.name]
@@ -73,7 +74,7 @@ class TLVideoCog(commands.Cog):
             self.cached_embeds[boss.number] = (content, embeds)
 
             subsc_msgs = pg.get_subsc_messages(boss.number)
-            err_msgs = []
+            err_msgs: list[pg.SubscMessage] = []
             for msg in subsc_msgs:
                 await asyncio.sleep(1)
                 try:
@@ -88,16 +89,34 @@ class TLVideoCog(commands.Cog):
                     await fmsg.edit(content=content, embeds=embeds)
                 except discord.NotFound:
                     err_msgs.append(msg)
-                except HTTPException as e:
-                    self.logger.error("error edit subscribe message. message.id: %s. error: %s", msg.message_id, e)
-                except Exception as e:
-                    self.logger.error(
-                        "unknown exceptions by edit subscribe message. message.id: %s. error: %s", msg.message_id, e
+                except HTTPException:
+                    logger.error(
+                        "HTTP exception by edit subscribe message",
+                        exc_info=True,
+                        extra={
+                            "channel_id": msg.channel_id,
+                            "message_id": msg.message_id,
+                        },
+                    )
+                except Exception:
+                    logger.error(
+                        "unknown exceptions by edit subscribe message",
+                        exc_info=True,
+                        extra={
+                            "channel_id": msg.channel_id,
+                            "message_id": msg.message_id,
+                        },
                     )
 
             for em in err_msgs:
                 # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
-                self.logger.info("remove message subscriber. message.id: %s", em.message_id)
+                logger.info(
+                    "remove message subscriber",
+                    extra={
+                        "channel_id": em.channel_id,
+                        "message_id": em.message_id,
+                    },
+                )
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
 
             gotten_list = [g.video_id for g in pg.get_tl_video_gotten_list()]
@@ -110,7 +129,7 @@ class TLVideoCog(commands.Cog):
             notice_video_embeds = [create_video_embed(v, updated_at) for _, v in yet_list]
             pg.set_tl_video_gotten_list([v.vid for _, v in yet_list])
             notify_list = pg.get_tl_video_notify_list()
-            err_msgs = []
+            err_chs: list[pg.TLVideoNotify] = []
             for notify in notify_list:
                 await asyncio.sleep(1)
                 try:
@@ -122,18 +141,33 @@ class TLVideoCog(commands.Cog):
                         channel = await guild.fetch_channel(notify.channel_id)
                     await channel.send(content=notice_content, embeds=notice_video_embeds[:10])
                 except discord.NotFound:
-                    err_msgs.append(msg)
-                except HTTPException as e:
-                    self.logger.error("error notify new tl video. channel.id: %s. error: %s", notify.channel_id, e)
-                except Exception as e:
-                    self.logger.error(
-                        "unknown exceptions by notify new tl video. message.id: %s. error: %s", msg.message_id, e
+                    err_chs.append(msg)
+                except HTTPException:
+                    logger.error(
+                        "HTTP exception by notify new tl video",
+                        exc_info=True,
+                        extra={
+                            "channel_id": notify.channel_id,
+                        },
+                    )
+                except Exception:
+                    logger.error(
+                        "unknown exceptions by notify new tl video",
+                        exc_info=True,
+                        extra={
+                            "channel_id": notify.channel_id,
+                        },
                     )
 
-            for em in err_msgs:
+            for err_ch in err_chs:
                 # チャンネルがない(削除された)場合、ti_video_notifyから当チャンネルを外す
-                self.logger.info("remove tl video notify. channel.id: %s", em.channel_id)
-                pg.remove_tl_video_notify(em.guild_id, em.channel_id)
+                logger.info(
+                    "remove tl video notify",
+                    extra={
+                        "channel_id": err_ch.channel_id,
+                    },
+                )
+                pg.remove_tl_video_notify(err_ch.guild_id, err_ch.channel_id)
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     async def ListTLVideosCommand(
@@ -141,13 +175,33 @@ class TLVideoCog(commands.Cog):
         ctx: discord.ApplicationContext,
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
     ):
-        self.logger.info("call list tl videos command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call list tl videos command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         if not self.enabled:
+            logger.warn(
+                "Misconfiguration of YOUTUBE_API_KEY environment variable",
+                extra={
+                    "channel_id": ctx.channel_id,
+                    "user_id": ctx.user.id if ctx.user else None,
+                },
+            )
             await ctx.respond("環境変数の設定が正しくされていません。(YOUTUBE_API_KEY)", ephemeral=True)
             return
 
         boss = pg.get_boss_info(boss_num)
         if boss is None:
+            logger.warn(
+                "Misconfiguration of boss info resiger",
+                extra={
+                    "channel_id": ctx.channel_id,
+                    "user_id": ctx.user.id if ctx.user else None,
+                },
+            )
             await ctx.respond(f"{boss_num}ボスの情報が登録されていません。", ephemeral=True)
             return
 
@@ -164,12 +218,25 @@ class TLVideoCog(commands.Cog):
 
     @ListTLVideosCommand.error
     async def ListTLVideosCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("list tl videos command error: {%s}", error)
+        logger.error(
+            "list tl videos command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_register", description="TL動画の新着通知を登録")
     async def ListTLVideosNotifyRegisterCommand(self, ctx: discord.ApplicationContext):
-        self.logger.info("call list tl videos notify register command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call list tl videos notify register command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         notify_list = pg.get_tl_video_notify_list()
         if pg.TLVideoNotify(ctx.guild_id, ctx.channel_id) not in notify_list:
             pg.set_tl_video_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id)
@@ -179,12 +246,25 @@ class TLVideoCog(commands.Cog):
 
     @ListTLVideosNotifyRegisterCommand.error
     async def ListTLVideosNotifyRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("list tl videos notify register command error: {%s}", error)
+        logger.error(
+            "list tl videos notify register command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_unregister", description="TL動画の新着通知を登録")
     async def ListTLVideosNotifyUnregisterCommand(self, ctx: discord.ApplicationContext):
-        self.logger.info("call list tl videos notify unregister command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call list tl videos notify unregister command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         notify_list = pg.get_tl_video_notify_list()
         if pg.TLVideoNotify(ctx.guild_id, ctx.channel_id) in notify_list:
             pg.remove_tl_video_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id)
@@ -194,11 +274,19 @@ class TLVideoCog(commands.Cog):
 
     @ListTLVideosNotifyUnregisterCommand.error
     async def ListTLVideosNotifyUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("list tl videos notify unregister command error: {%s}", error)
+        logger.error(
+            "list tl videos notify unregister command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
 def setup(bot: BotClass):
+    logger.info("Load bot cog from %s", __name__)
     bot.add_cog(TLVideoCog(bot))
 
 

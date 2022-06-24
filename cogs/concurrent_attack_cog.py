@@ -2,7 +2,7 @@ import asyncio
 import itertools
 import math
 import re
-from logging import Logger
+from logging import getLogger
 from pyclbr import Function
 from typing import Optional
 
@@ -14,6 +14,7 @@ from discord.ext import commands
 from discord.ui import InputText, Modal, Select, View
 from mybot import BotClass
 
+logger = getLogger(__name__)
 config = app_config.Config.get_instance()
 
 
@@ -37,6 +38,14 @@ class CancelUserSelect(Select):
         self.replace_function = replace_method
 
     async def callback(self, interaction: discord.Interaction):
+        logger.info(
+            "submit a cancel user select",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         refresh_message = await interaction.channel.fetch_message(self.message_id)
         repl_content = await self.replace_function(self.message_id, refresh_message.content, self.values, None)
         await refresh_message.edit(content=repl_content)
@@ -62,6 +71,14 @@ class DamageModal(Modal):
         self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
 
     async def callback(self, interaction: discord.Interaction):
+        logger.info(
+            "submit a damage modal",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         refresh_message = await interaction.channel.fetch_message(self.message_id)
         damage = self.children[0].value
         repl_content = await self.replace_function(
@@ -71,10 +88,9 @@ class DamageModal(Modal):
 
 
 class ConcurrentAttackButtonView(View):
-    def __init__(self, _logger: Logger):
+    def __init__(self):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
-        self.logger = _logger
         self.lock_lock = asyncio.Lock()
         self.replace_locks = {}
         self.cache_contents = {}
@@ -114,7 +130,14 @@ class ConcurrentAttackButtonView(View):
         style=discord.ButtonStyle.blurple, label="新凸:物", emoji="\N{Dagger Knife}", custom_id="new_physics_attack"
     )
     async def NewPhysicsAttackButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push new physics attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push new physics attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         repl_content = await self.sync_replace_content(
             interaction.message.id,
             interaction.message.content,
@@ -127,7 +150,14 @@ class ConcurrentAttackButtonView(View):
         style=discord.ButtonStyle.blurple, label="新凸:魔", emoji="\N{Star Of David}", custom_id="new_magic_attack"
     )
     async def NewMagicAttackButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push new magic attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push new magic attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         repl_content = await self.sync_replace_content(
             interaction.message.id,
             interaction.message.content,
@@ -140,7 +170,14 @@ class ConcurrentAttackButtonView(View):
         style=discord.ButtonStyle.green, label="持越:物", emoji="\N{Dagger Knife}", custom_id="carry_physics_attack"
     )
     async def CarryOverPhysicsAttackButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push carry over physics attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push carry over physics attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         repl_content = await self.sync_replace_content(
             interaction.message.id,
             interaction.message.content,
@@ -153,7 +190,14 @@ class ConcurrentAttackButtonView(View):
         style=discord.ButtonStyle.green, label="持越:魔", emoji="\N{Star Of David}", custom_id="carry_magic_attack"
     )
     async def CarryOverMagicAttackButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push carry over magic attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push carry over magic attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         repl_content = await self.sync_replace_content(
             interaction.message.id,
             interaction.message.content,
@@ -164,7 +208,14 @@ class ConcurrentAttackButtonView(View):
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, label="ダメージ入力", custom_id="input_damage")
     async def InputDamageButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push input damage attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push input damage attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         atk_list = interaction.message.content.splitlines()
         username = interaction.user.display_name
         matches = [atk for atk in atk_list[2:] if re.match(rf".*\s{username} :", atk)]
@@ -176,7 +227,14 @@ class ConcurrentAttackButtonView(View):
 
     @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="cancel_attack")
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push cancel attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push cancel attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
         repl_content = await self.sync_replace_content(
             interaction.message.id,
             interaction.message.content,
@@ -187,7 +245,18 @@ class ConcurrentAttackButtonView(View):
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="代理キャンセル", custom_id="proxy_cancel_attack")
     async def ProxyCancelAttackButton(self, button, interaction: discord.Interaction):
-        self.logger.debug("push proxy cancel attack button. user.id: %s", interaction.user.id)
+        logger.info(
+            "push proxy cancel attack button",
+            extra={
+                "channel_id": interaction.channel_id,
+                "message_id": interaction.message.id if interaction.message else None,
+                "user_id": interaction.user.id if interaction.user else None,
+            },
+        )
+        atk_list = interaction.message.content.splitlines()
+        if len(atk_list) <= 2:
+            return await interaction.response.defer()
+
         pcview = ProxyCancelView(interaction.message, self.sync_replace_content)
         resp_msg = await interaction.response.send_message(
             content="キャンセルする凸のユーザーを選択して下さい(複数可)", view=pcview, ephemeral=True
@@ -207,7 +276,6 @@ class ConcurrentAttackCog(commands.Cog):
 
     def __init__(self, bot: BotClass):
         self.bot = bot
-        self.logger = bot.logger
 
     @slash_command(guild_ids=config.guild_ids, name="concurrent_atk", description="同時凸のテンプレートを作成する")
     async def ConcurrentAttackCommand(
@@ -216,8 +284,14 @@ class ConcurrentAttackCog(commands.Cog):
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
         hp: Option(int, hp_desc, required=False, default=None),
     ):
-        self.logger.info("call concurrent attack command. author.id: %s", ctx.author.id)
-        navigator = ConcurrentAttackButtonView(self.logger)
+        logger.info(
+            "call concurrent attack command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
+        navigator = ConcurrentAttackButtonView()
         boss = pg.get_boss_info(boss_num)
         if boss is None:
             await ctx.respond(f"{boss_num}ボス情報が登録されていません。", ephemeral=True)
@@ -227,7 +301,14 @@ class ConcurrentAttackCog(commands.Cog):
 
     @ConcurrentAttackCommand.error
     async def ConcurrentAttackCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("concurrent attack command error: {%s}", error)
+        logger.error(
+            "concurrent attack command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="carry_over", description="同時凸時の持ち越し時間の算出")
@@ -240,7 +321,13 @@ class ConcurrentAttackCog(commands.Cog):
         dmg3: Option(int, dmg_desc, required=False, default=None),
         dmg4: Option(int, dmg_desc, required=False, default=None),
     ):
-        self.logger.info("call calc carry over time command. author.id: %s", ctx.author.id)
+        logger.info(
+            "call calc carry over time command",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+            },
+        )
         input_dmgs = [dmg1]
         if dmg2 is not None:
             input_dmgs.append(dmg2)
@@ -274,11 +361,19 @@ class ConcurrentAttackCog(commands.Cog):
 
     @CalcCarryOverTimeCommand.error
     async def CalcCarryOverTimeCommand_error(self, ctx: discord.ApplicationContext, error):
-        self.logger.error("calc carry over time command error: {%s}", error)
+        logger.error(
+            "calc carry over time command error",
+            extra={
+                "channel_id": ctx.channel_id,
+                "user_id": ctx.user.id if ctx.user else None,
+                "error": error,
+            },
+        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
 def setup(bot: BotClass):
+    logger.info("Load bot cog from %s", __name__)
     bot.add_cog(ConcurrentAttackCog(bot))
     bot.persistent_view_classes.add(ConcurrentAttackButtonView)
 
