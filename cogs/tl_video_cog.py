@@ -79,11 +79,9 @@ class TLVideoCog(commands.Cog):
                     guild = self.bot.get_guild(msg.guild_id)
                     if guild is None:
                         guild = await self.bot.fetch_guild(msg.guild_id)
-                        await asyncio.sleep(1)
                     channel = guild.get_channel(msg.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(msg.channel_id)
-                        await asyncio.sleep(1)
                     fmsg = await channel.fetch_message(msg.message_id)
 
                     await fmsg.edit(content=content, embeds=embeds)
@@ -118,11 +116,9 @@ class TLVideoCog(commands.Cog):
                     guild = self.bot.get_guild(notify.guild_id)
                     if guild is None:
                         guild = await self.bot.fetch_guild(notify.guild_id)
-                        await asyncio.sleep(1)
                     channel = guild.get_channel(notify.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(notify.channel_id)
-                        await asyncio.sleep(1)
                     await channel.send(content=notice_content, embeds=notice_video_embeds[:10])
                 except discord.NotFound:
                     err_msgs.append(msg)
@@ -137,6 +133,8 @@ class TLVideoCog(commands.Cog):
                 # チャンネルがない(削除された)場合、ti_video_notifyから当チャンネルを外す
                 self.logger.info("remove tl video notify. channel.id: %s", em.channel_id)
                 pg.remove_tl_video_notify(em.guild_id, em.channel_id)
+
+            await asyncio.sleep(10)
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     async def ListTLVideosCommand(
