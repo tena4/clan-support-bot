@@ -11,15 +11,16 @@ import discord
 import postgres_helper as pg
 from discord.commands import Option, slash_command
 from discord.ext import commands
+from discord.ui import InputText, Modal, Select, View
 from mybot import BotClass
 
 config = app_config.Config.get_instance()
 
 
-class CancelUserSelect(discord.ui.Select):
+class CancelUserSelect(Select):
     def __init__(self, message: discord.Message, replace_method: Function):
         atk_contents = message.content.splitlines()
-        usernames = [re.search("  .* :$", atk).group().strip(" :") for atk in atk_contents[2:]]
+        usernames = [re.search("  .* :", atk).group().strip(" :") for atk in atk_contents[2:]]
         options = [discord.SelectOption(label=u) for u in usernames]
 
         # The placeholder is what will be shown when no option is chosen
@@ -37,22 +38,39 @@ class CancelUserSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         refresh_message = await interaction.channel.fetch_message(self.message_id)
-        repl_content = await self.replace_function(
-            self.message_id, interaction.channel, refresh_message.content, self.values, None
-        )
+        repl_content = await self.replace_function(self.message_id, refresh_message.content, self.values, None)
         await refresh_message.edit(content=repl_content)
         await interaction.response.send_message(
             content="下記ユーザーの凸をキャンセルしました。\n{}".format("\n".join(self.values)), ephemeral=True
         )
 
 
-class ProxyCancelView(discord.ui.View):
+class ProxyCancelView(View):
     def __init__(self, message, replace_method):
         super().__init__(timeout=120)
         self.add_item(CancelUserSelect(message, replace_method))
 
 
-class ConcurrentAttackButtonView(discord.ui.View):
+class DamageModal(Modal):
+    def __init__(self, message: discord.Message, username: str, replace_method: Function) -> None:
+        super().__init__(title="ダメージ入力")
+        self.username = username
+        self.message_id = message.id
+        self.replace_function = replace_method
+        atk_contents = message.content.splitlines()
+        target_attack = [atk for atk in atk_contents[2:] if re.match(rf".*\s{username} :", atk)][0]
+        self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
+
+    async def callback(self, interaction: discord.Interaction):
+        refresh_message = await interaction.channel.fetch_message(self.message_id)
+        damage = self.children[0].value
+        repl_content = await self.replace_function(
+            self.message_id, refresh_message.content, [self.username], None, damage
+        )
+        await interaction.response.edit_message(content=repl_content)
+
+
+class ConcurrentAttackButtonView(View):
     def __init__(self, _logger: Logger):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
@@ -64,10 +82,10 @@ class ConcurrentAttackButtonView(discord.ui.View):
     async def sync_replace_content(
         self,
         id: int,
-        channel: discord.PartialMessageable,
         src_content: str,
         usernames: list[str],
         repl_atk: Optional[str],
+        note: Optional[str] = None,
     ) -> str:
         async with self.lock_lock:
             lock = self.replace_locks.get(id)
@@ -81,7 +99,10 @@ class ConcurrentAttackButtonView(discord.ui.View):
                 src_content = cache_content
             atk_contents = src_content.splitlines()
             for username in usernames:
-                atk_contents = replace_attacks(atk_contents, username, repl_atk)
+                if note is None:
+                    atk_contents = replace_attacks(atk_contents, username, repl_atk)
+                else:
+                    atk_contents = add_note(atk_contents, username, note)
             self.cache_contents[id] = "\n".join(atk_contents)
             dst_content = self.cache_contents[id]
         return dst_content
@@ -96,7 +117,6 @@ class ConcurrentAttackButtonView(discord.ui.View):
         self.logger.debug("push new physics attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
             interaction.message.id,
-            interaction.channel,
             interaction.message.content,
             [interaction.user.display_name],
             "　新凸　 物\N{Dagger Knife}",
@@ -110,7 +130,6 @@ class ConcurrentAttackButtonView(discord.ui.View):
         self.logger.debug("push new magic attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
             interaction.message.id,
-            interaction.channel,
             interaction.message.content,
             [interaction.user.display_name],
             "　新凸　 魔\N{Star Of David}",
@@ -124,7 +143,6 @@ class ConcurrentAttackButtonView(discord.ui.View):
         self.logger.debug("push carry over physics attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
             interaction.message.id,
-            interaction.channel,
             interaction.message.content,
             [interaction.user.display_name],
             "★持越★ 物\N{Dagger Knife}",
@@ -138,19 +156,29 @@ class ConcurrentAttackButtonView(discord.ui.View):
         self.logger.debug("push carry over magic attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
             interaction.message.id,
-            interaction.channel,
             interaction.message.content,
             [interaction.user.display_name],
             "★持越★ 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
 
+    @discord.ui.button(style=discord.ButtonStyle.secondary, label="ダメージ入力", custom_id="input_damage")
+    async def InputDamageButton(self, button, interaction: discord.Interaction):
+        self.logger.debug("push input damage attack button. user.id: %s", interaction.user.id)
+        atk_list = interaction.message.content.splitlines()
+        username = interaction.user.display_name
+        matches = [atk for atk in atk_list[2:] if re.match(rf".*\s{username} :", atk)]
+        if len(matches) == 1:
+            modal = DamageModal(interaction.message, username, self.sync_replace_content)
+            await interaction.response.send_modal(modal)
+        else:
+            await interaction.response.send_message("対象凸がありません。", ephemeral=True)
+
     @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="cancel_attack")
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
         self.logger.debug("push cancel attack button. user.id: %s", interaction.user.id)
         repl_content = await self.sync_replace_content(
             interaction.message.id,
-            interaction.channel,
             interaction.message.content,
             [interaction.user.display_name],
             None,
@@ -256,10 +284,18 @@ def setup(bot: BotClass):
 
 
 def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
-    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username} :$", atk)]
+    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username} :.*", atk)]
     if repl_atk is not None:
         repl_atk_list.append(f"{repl_atk}  {username} :")
     return repl_atk_list
+
+
+def add_note(atk_list: list[str], username: str, note: str):
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.match(rf".*\s{username} :", atk)]
+    for i in target_indexes:
+        atk = re.match(rf".*\s{username} :", atk_list[i]).group()
+        atk_list[i] = f"{atk} {note}"
+    return atk_list
 
 
 def calc_carry_over_permutations(hp: int, input_dmgs: list[int]) -> list[tuple]:
