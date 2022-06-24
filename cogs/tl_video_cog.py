@@ -43,7 +43,7 @@ class TLVideoCog(commands.Cog):
         bosses = pg.get_bosses_info()
         for boss in bosses:
             await asyncio.sleep(10)
-            query = f"{boss.name}+5段階目"
+            query = f"{boss.name} 段階目 -1段階目 -2段階目 -3段階目"
             api_key = self.get_api_key()
             try:
                 logger.debug(f'youtube search. query: "{query}"')
@@ -381,7 +381,7 @@ def youtube_search(query: str, api_key: str, page_token=None) -> list[TLVideo]:
 
     next_page_token = search_response.get("nextPageToken")
     if next_page_token:
-        next_videos = youtube_search(token=next_page_token)
+        next_videos = youtube_search(query=query, api_key=api_key, page_token=next_page_token)
         videos += next_videos
 
     return videos
