@@ -1,6 +1,7 @@
 from collections import namedtuple
 from datetime import date
 from logging import getLogger
+from typing import Optional
 
 import psycopg2
 from psycopg2 import extras
@@ -12,10 +13,11 @@ config = app_config.Config.get_instance()
 
 BossInfo = namedtuple("BossInfo", ("number", "name", "hp"))
 SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id", "boss_number"))
-AttacReportRegister = namedtuple("AttacReportRegister", ("guild_id", "channel_id", "last_published"))
+AttackReportRegister = namedtuple("AttackReportRegister", ("guild_id", "channel_id", "last_published"))
 ClanBattleSchedule = namedtuple("ClanBattleSchedule", ("start_date", "end_date"))
 TLVideoNotify = namedtuple("TLVideoNotify", ("guild_id", "channel_id"))
 TLVideoGotten = namedtuple("TLVideoGotten", ("video_id"))
+ClanMemberRole = namedtuple("ClanMemberRole", ("guild_id", "role_id"))
 
 
 def get_connection():
@@ -37,6 +39,7 @@ def db_init():
         __create_clan_battle_schedule(conn)
         __create_tl_video_notify(conn)
         __create_tl_video_gotten(conn)
+        __create_clan_member_role(conn)
 
 
 def __create_boss_info_table(conn):
@@ -91,7 +94,12 @@ def __create_tl_video_gotten(conn):
         cur.execute(("CREATE TABLE IF NOT EXISTS tl_video_gotten" "(video_id varchar(32) PRIMARY KEY);"))
 
 
-def get_boss_info(number: int) -> BossInfo:
+def __create_clan_member_role(conn):
+    with conn.cursor() as cur:
+        cur.execute(("CREATE TABLE IF NOT EXISTS clan_member_role" "(guild_id bigint PRIMARY KEY, role_id bigint);"))
+
+
+def get_boss_info(number: int) -> Optional[BossInfo]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT number, name, hp FROM boss_info WHERE number = %s;", (number,))
@@ -161,12 +169,12 @@ def delete_subsc_message(guild_id: int, channel_id: int, message_id: int):
             )
 
 
-def get_attack_report_register_list() -> list[AttacReportRegister]:
+def get_attack_report_register_list() -> list[AttackReportRegister]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT guild_id, channel_id, last_published FROM attack_report_register;")
             records = cur.fetchall()
-            reglist = [AttacReportRegister(record[0], record[1], record[2]) for record in records]
+            reglist = [AttackReportRegister(record[0], record[1], record[2]) for record in records]
             return reglist
 
 
@@ -194,7 +202,7 @@ def remove_attack_report_register(guild_id: int, channel_id: int):
             )
 
 
-def get_clan_battle_schedule() -> ClanBattleSchedule:
+def get_clan_battle_schedule() -> Optional[ClanBattleSchedule]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT start_date, end_date FROM clan_battle_schedule WHERE id = 1;")
@@ -264,4 +272,40 @@ def set_tl_video_gotten_list(video_ids: list[str]):
                 cur,
                 ("INSERT INTO tl_video_gotten (video_id) VALUES %s;"),
                 (insert_values),
+            )
+
+
+def get_clan_member_role(guild_id: int) -> Optional[ClanMemberRole]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT guild_id, role_id FROM clan_member_role WHERE guild_id = %s;",
+                (guild_id,),
+            )
+            record = cur.fetchone()
+            if record is None:
+                return None
+            return ClanMemberRole(record[0], record[1])
+
+
+def set_clan_member_role(guild_id: int, role_id: str):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                (
+                    "INSERT INTO clan_member_role (guild_id, role_id)"
+                    "VALUES (%s, %s) "
+                    "ON CONFLICT (guild_id) "
+                    "DO UPDATE SET role_id = %s;"
+                ),
+                (guild_id, role_id, role_id),
+            )
+
+
+def remove_clan_member_role(guild_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM clan_member_role WHERE guild_id = %s;",
+                (guild_id,),
             )

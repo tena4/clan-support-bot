@@ -10,7 +10,9 @@ config = app_config.Config.get_instance()
 
 class BotClass(discord.Bot):
     def __init__(self):
-        super().__init__()
+        intents = discord.Intents.default()
+        intents.members = True
+        super().__init__(intents=intents)
         self.persistent_views_added = False
         self.persistent_view_classes = set()
 
