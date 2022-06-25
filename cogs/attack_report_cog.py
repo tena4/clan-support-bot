@@ -32,11 +32,21 @@ class AttarckReportView(discord.ui.View):
         report_field = next(filter(lambda f: f.name == "3凸完了", interaction.message.embeds[0].fields), None)
         if report_field is None:
             return await interaction.response.send_message("error", ephemeral=True)
+        yet_report_field = next(filter(lambda f: f.name == "3凸未完", interaction.message.embeds[0].fields), None)
         reporters = report_field.value.splitlines()
+        if yet_report_field is not None:
+            yet_reporters = yet_report_field.value.splitlines()
+            if interaction.user.display_name not in (reporters + yet_reporters):
+                return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
         if interaction.user.display_name not in reporters:
             reporters.append(interaction.user.display_name)
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="\n".join(reporters))
+        if yet_report_field is not None:
+            if interaction.user.display_name in yet_reporters:
+                yet_reporters.remove(interaction.user.display_name)
+            embed.add_field(name="3凸未完", value="\n".join(yet_reporters))
         embed.add_field(name="凸完人数", value=str(len(reporters) - 1))
         await interaction.response.edit_message(embed=embed)
 
@@ -53,11 +63,21 @@ class AttarckReportView(discord.ui.View):
         report_field = next(filter(lambda f: f.name == "3凸完了", interaction.message.embeds[0].fields), None)
         if report_field is None:
             return await interaction.response.send_message("error", ephemeral=True)
+        yet_report_field = next(filter(lambda f: f.name == "3凸未完", interaction.message.embeds[0].fields), None)
         reporters = report_field.value.splitlines()
+        if yet_report_field is not None:
+            yet_reporters = yet_report_field.value.splitlines()
+            if interaction.user.display_name not in (reporters + yet_reporters):
+                return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
         if interaction.user.display_name in reporters:
             reporters.remove(interaction.user.display_name)
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="\n".join(reporters))
+        if yet_report_field is not None:
+            if interaction.user.display_name not in yet_reporters:
+                yet_reporters.append(interaction.user.display_name)
+            embed.add_field(name="3凸未完", value="\n".join(yet_reporters))
         embed.add_field(name="凸完人数", value=str(len(reporters) - 1))
         await interaction.response.edit_message(embed=embed)
 
@@ -70,7 +90,7 @@ class AttarckReportCog(commands.Cog):
     def cog_unload(self):
         self.scheduled_create_report.cancel()
 
-    @tasks.loop(time=time(hour=20, minute=0))
+    @tasks.loop(time=time(hour=2, minute=54))
     async def scheduled_create_report(self):
         logger.info("run scheduled create report")
         now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
@@ -80,7 +100,7 @@ class AttarckReportCog(commands.Cog):
         elif now_date >= cbs.start_date and now_date <= cbs.end_date:
             day_index = (now_date - cbs.start_date).days
             reglist = pg.get_attack_report_register_list()
-            err_channels = []
+            err_channels: list[pg.AttackReportRegister] = []
             for reg in reglist:
                 if reg.last_published < now_date:
                     try:
@@ -93,6 +113,13 @@ class AttarckReportCog(commands.Cog):
                         navigator = AttarckReportView()
                         embed = discord.Embed(title="凸完了報告")
                         embed.add_field(name="3凸完了", value="-----")
+                        clan_role = pg.get_clan_member_role(guild_id=reg.guild_id)
+                        if clan_role is not None:
+                            all_members = await guild.fetch_members().flatten()
+                            member_names = [
+                                m.display_name for m in all_members if clan_role.role_id in [r.id for r in m.roles]
+                            ]
+                            embed.add_field(name="3凸未完", value="\n".join(["-----"] + member_names))
                         embed.add_field(name="凸完人数", value="0")
                         await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
 
@@ -122,10 +149,10 @@ class AttarckReportCog(commands.Cog):
                 logger.info(
                     "remove attack report register",
                     extra={
-                        "channel_id": err_ch,
+                        "channel_id": err_ch.channel_id,
                     },
                 )
-                pg.remove_attack_report_register(err_ch.guild_id, cbs.channel_id)
+                pg.remove_attack_report_register(err_ch.guild_id, err_ch.channel_id)
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する")
     async def AttackReportAutoRegisterCommand(self, ctx: discord.ApplicationContext):
@@ -194,9 +221,14 @@ class AttarckReportCog(commands.Cog):
                 "user_id": ctx.user.id if ctx.user else None,
             },
         )
-        navigator = AttarckReportView(logger)
+        navigator = AttarckReportView()
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="-----")
+        clan_role = pg.get_clan_member_role(guild_id=ctx.guild_id)
+        if clan_role is not None:
+            all_members = await ctx.guild.fetch_members().flatten()
+            member_names = [m.display_name for m in all_members if clan_role.role_id in [r.id for r in m.roles]]
+            embed.add_field(name="3凸未完", value="\n".join(["-----"] + member_names))
         embed.add_field(name="凸完人数", value="0")
         await ctx.respond(embed=embed, view=navigator)
 
