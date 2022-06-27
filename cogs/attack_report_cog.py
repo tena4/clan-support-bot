@@ -90,7 +90,7 @@ class AttarckReportCog(commands.Cog):
     def cog_unload(self):
         self.scheduled_create_report.cancel()
 
-    @tasks.loop(time=time(hour=2, minute=54))
+    @tasks.loop(time=time(hour=20, minute=0))
     async def scheduled_create_report(self):
         logger.info("run scheduled create report")
         now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
