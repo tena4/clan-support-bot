@@ -7,10 +7,15 @@ import discord
 from discord.commands import slash_command
 from discord.ext import commands
 from discord.ui import InputText, Modal
+from log_decorator import ButtonLogDecorator, CallbackLogDecorator, CommandLogDecorator
 from mybot import BotClass
 
 logger = getLogger(__name__)
 config = app_config.Config.get_instance()
+btn_log = ButtonLogDecorator(logger=logger)
+cb_log = CallbackLogDecorator(logger=logger)
+cmd_log = CommandLogDecorator(logger=logger)
+
 BASE_SECONDS = 90
 
 
@@ -34,15 +39,8 @@ class TLConvertModal(Modal):
             )
         )
 
+    @cb_log.log("submit tl convert modal")
     async def callback(self, interaction: discord.Interaction):
-        logger.info(
-            "submit tl convert modal",
-            extra={
-                "channel_id": interaction.channel_id,
-                "message_id": interaction.message.id if interaction.message else None,
-                "user_id": interaction.user.id if interaction.user else None,
-            },
-        )
         if self.children[1].value.isdecimal():
             tl = self.children[0].value
             start_seconds = int(self.children[1].value)
@@ -67,15 +65,8 @@ class TLFormatModal(Modal):
             )
         )
 
+    @cb_log.log("submit tl format modal")
     async def callback(self, interaction: discord.Interaction):
-        logger.info(
-            "submit tl format modal",
-            extra={
-                "channel_id": interaction.channel_id,
-                "message_id": interaction.message.id if interaction.message else None,
-                "user_id": interaction.user.id if interaction.user else None,
-            },
-        )
         tl = self.children[0].value
         fmt_tl = change_format(tl)
         await interaction.response.send_message(content=f"TLフォーマット変換結果\n```c\n{fmt_tl}```", ephemeral=True)
@@ -87,28 +78,14 @@ class TLLauncherView(discord.ui.View):
         super().__init__(timeout=None)
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, label="秒数変換", custom_id="tl_conv")
+    @btn_log.log("push tl convert button")
     async def TLConvertButton(self, button, interaction: discord.Interaction):
-        logger.info(
-            "push tl convert button",
-            extra={
-                "channel_id": interaction.channel_id,
-                "message_id": interaction.message.id if interaction.message else None,
-                "user_id": interaction.user.id if interaction.user else None,
-            },
-        )
         modal = TLConvertModal()
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(style=discord.ButtonStyle.green, label="フォーマット変換", custom_id="tl_fmt")
+    @btn_log.log("push tl format button")
     async def TLFormatButton(self, button, interaction: discord.Interaction):
-        logger.info(
-            "push tl format button",
-            extra={
-                "channel_id": interaction.channel_id,
-                "message_id": interaction.message.id if interaction.message else None,
-                "user_id": interaction.user.id if interaction.user else None,
-            },
-        )
         modal = TLFormatModal()
         await interaction.response.send_modal(modal)
 
@@ -118,62 +95,30 @@ class TLCog(commands.Cog):
         self.bot = bot
 
     @slash_command(guild_ids=config.guild_ids, name="tl_conv", description="TLの秒数変換")
+    @cmd_log.info("call tl convert command")
     async def TLConvertCommand(self, ctx: discord.ApplicationContext):
-        logger.info(
-            "call tl convert command",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-            },
-        )
         modal = TLConvertModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLConvertCommand.error
+    @cmd_log.error("tl convert command error")
     async def TLConvertCommand_error(self, ctx: discord.ApplicationContext, error):
-        logger.error(
-            "tl convert command error",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-                "error": error,
-            },
-        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_fmt", description="TLのフォーマット変換")
+    @cmd_log.info("call tl format command")
     async def TLFormatCommand(self, ctx: discord.ApplicationContext):
-        logger.info(
-            "call tl format command",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-            },
-        )
         modal = TLFormatModal()
         await ctx.interaction.response.send_modal(modal)
 
     @TLFormatCommand.error
+    @cmd_log.error("tl format command error")
     async def TLFormatCommand_error(self, ctx: discord.ApplicationContext, error):
-        logger.error(
-            "tl format command error",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-                "error": error,
-            },
-        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="tl_launcher", description="TLコマンドのランチャーを設置")
+    @cmd_log.info("call tl launcher command")
     async def TLLauncherCommand(self, ctx: discord.ApplicationContext):
-        logger.info(
-            "call tl launcher command",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-            },
-        )
         navigator = TLLauncherView()
         embed = discord.Embed(title="TL変換ランチャー")
         embed.add_field(
@@ -187,15 +132,8 @@ class TLCog(commands.Cog):
         await ctx.respond(embed=embed, view=navigator)
 
     @TLLauncherCommand.error
+    @cmd_log.error("tl launcher command error")
     async def TLLauncherCommand_error(self, ctx: discord.ApplicationContext, error):
-        logger.error(
-            "tl launcher command error",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-                "error": error,
-            },
-        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
