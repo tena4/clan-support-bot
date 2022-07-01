@@ -8,10 +8,13 @@ import discord
 import postgres_helper as pg
 from discord.commands import slash_command
 from discord.ext import commands, tasks
+from log_decorator import ButtonLogDecorator, CommandLogDecorator
 from mybot import BotClass
 
 logger = getLogger(__name__)
 config = app_config.Config.get_instance()
+btn_log = ButtonLogDecorator(logger=logger)
+cmd_log = CommandLogDecorator(logger=logger)
 
 
 class AttarckReportView(discord.ui.View):
@@ -20,15 +23,8 @@ class AttarckReportView(discord.ui.View):
         super().__init__(timeout=None)
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, label="3凸完了", custom_id="attack_finished")
+    @btn_log.log("push attack finished button")
     async def AttackFinishedButton(self, button, interaction: discord.Interaction):
-        logger.info(
-            "push attack finished button",
-            extra={
-                "channel_id": interaction.channel_id,
-                "message_id": interaction.message.id if interaction.message else None,
-                "user_id": interaction.user.id if interaction.user else None,
-            },
-        )
         report_field = next(filter(lambda f: f.name == "3凸完了", interaction.message.embeds[0].fields), None)
         if report_field is None:
             return await interaction.response.send_message("error", ephemeral=True)
@@ -51,15 +47,8 @@ class AttarckReportView(discord.ui.View):
         await interaction.response.edit_message(embed=embed)
 
     @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="attack_finished_cancel")
+    @btn_log.log("push attack finished cancel button")
     async def AttackFinishedCancelButton(self, button, interaction: discord.Interaction):
-        logger.info(
-            "push attack finished cancel button",
-            extra={
-                "channel_id": interaction.channel_id,
-                "message_id": interaction.message.id if interaction.message else None,
-                "user_id": interaction.user.id if interaction.user else None,
-            },
-        )
         report_field = next(filter(lambda f: f.name == "3凸完了", interaction.message.embeds[0].fields), None)
         if report_field is None:
             return await interaction.response.send_message("error", ephemeral=True)
@@ -155,14 +144,8 @@ class AttarckReportCog(commands.Cog):
                 pg.remove_attack_report_register(err_ch.guild_id, err_ch.channel_id)
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する")
+    @cmd_log.info("call attack report make auto register command")
     async def AttackReportAutoRegisterCommand(self, ctx: discord.ApplicationContext):
-        logger.info(
-            "call attack report make auto register command",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-            },
-        )
         reglist = pg.get_attack_report_register_list()
         reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
         if reg is None:
@@ -172,26 +155,13 @@ class AttarckReportCog(commands.Cog):
             await ctx.respond("このチャンネルに凸完了報告表の自動作成は既に登録されています", ephemeral=True)
 
     @AttackReportAutoRegisterCommand.error
+    @cmd_log.error("attack report make auto register command error")
     async def AttackReportAutoRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
-        logger.error(
-            "attack report make auto register command error",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-                "error": error,
-            },
-        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_unregister", description="凸完了報告表の自動作成の登録を解除する")
+    @cmd_log.info("call attack report make auto unregister command")
     async def AttackReportAutoUnregisterCommand(self, ctx: discord.ApplicationContext):
-        logger.info(
-            "call attack report make auto unregister command",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-            },
-        )
         reglist = pg.get_attack_report_register_list()
         reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
         if reg is not None:
@@ -201,26 +171,13 @@ class AttarckReportCog(commands.Cog):
             await ctx.respond("このチャンネルに凸完了報告表の自動作成は登録されていません", ephemeral=True)
 
     @AttackReportAutoUnregisterCommand.error
+    @cmd_log.error("attack report make auto unregister command error")
     async def AttackReportAutoUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
-        logger.error(
-            "attack report make auto unregister command error",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-                "error": error,
-            },
-        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_make", description="凸完了報告表を作成")
+    @cmd_log.info("call attack report make command")
     async def AttackReportCommand(self, ctx: discord.ApplicationContext):
-        logger.info(
-            "call attack report make command",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-            },
-        )
         navigator = AttarckReportView()
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="-----")
@@ -233,15 +190,8 @@ class AttarckReportCog(commands.Cog):
         await ctx.respond(embed=embed, view=navigator)
 
     @AttackReportCommand.error
+    @cmd_log.error("attack report make command error")
     async def AttackReportCommand_error(self, ctx: discord.ApplicationContext, error):
-        logger.error(
-            "attack report make command error",
-            extra={
-                "channel_id": ctx.channel_id,
-                "user_id": ctx.user.id if ctx.user else None,
-                "error": error,
-            },
-        )
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
