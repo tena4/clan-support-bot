@@ -49,8 +49,13 @@ class TLVideoCog(commands.Cog):
             query = f"{boss.name} 段階目"
             api_key = self.get_api_key()
             try:
-                logger.debug(f'youtube search. query: "{query}"')
-                videos = youtube_search(query, api_key)
+                logger.debug("youtube search", extra={"query": query})
+                search_pub_after = datetime.now() - timedelta(days=1.0)
+                videos = youtube_search(query, search_pub_after, api_key)
+                logger.info(
+                    "get videos by youtube search",
+                    extra={"boss_number": boss.number, "videos_count": len(videos)},
+                )
             except HttpError as e:
                 logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
                 break
@@ -68,12 +73,26 @@ class TLVideoCog(commands.Cog):
                 and v.damage > 0
             ]
 
-            videos.sort(key=lambda x: x.damage, reverse=True)
+            gotten_pub_after = datetime.now() - timedelta(days=10.0)
+            gotten_videos = pg.get_tl_video_gotten_list(gotten_pub_after, boss.number)
+            gotten_vids = [g.video_id for g in gotten_videos]
+            gotten_vids = gotten_vids if gotten_vids is not None else []
+            yet_gotten_videos = [
+                pg.TLVideoGotten(v.vid, v.published_at, boss.number) for v in videos if v.vid not in gotten_vids
+            ]
+            yet_gotten_videos = yet_gotten_videos if yet_gotten_videos is not None else []
+            if yet_gotten_videos:
+                pg.set_tl_video_gotten_list(yet_gotten_videos)
+            target_vids = gotten_vids + [v.video_id for v in yet_gotten_videos]
+            if not target_vids:
+                continue
+            target_videos = get_youtube_videos(target_vids, api_key)
+            target_videos.sort(key=lambda x: x.damage, reverse=True)
             updated_at = datetime.now(timezone(timedelta(hours=9)))
             updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
             content = f"TL動画対象ボス: {boss.name}\n最終更新日時: {updated_at_str}\nヒット件数: {len(videos)}, ダメージ上位10件を表示"
 
-            embeds = [create_video_embed(v, updated_at) for v in videos[:10]]
+            embeds = [create_video_embed(v, updated_at) for v in target_videos[:10]]
             self.cached_embeds[boss.number] = (content, embeds)
 
             subsc_msgs = pg.get_subsc_messages(boss.number)
@@ -137,15 +156,13 @@ class TLVideoCog(commands.Cog):
                 )
                 pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
 
-            gotten_list = [g.video_id for g in pg.get_tl_video_gotten_list()]
-            yet_list = [(i, v) for i, v in enumerate(videos) if v.vid not in gotten_list]
+            yet_list = [(i, v) for i, v in enumerate(target_videos) if v.vid not in gotten_vids]
             if len(yet_list) == 0:
                 continue
             notice_content = "TL動画対象ボス: {}\n通知時ダメージ順位: [{}]".format(
                 boss.name, ", ".join([f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list])
             )
             notice_video_embeds = [create_video_embed(v, updated_at) for _, v in yet_list]
-            pg.set_tl_video_gotten_list([v.vid for _, v in yet_list])
             notify_list = pg.get_tl_video_notify_list()
             err_notify_list: list[pg.TLVideoNotify] = []
             for notify in notify_list:
@@ -297,29 +314,50 @@ def timedelta_color(delta: timedelta) -> discord.Colour:
 
 class TLVideo:
     def __init__(self, youtube_item) -> None:
-        self.title = youtube_item["snippet"]["title"]
-        self.vid = youtube_item["id"]["videoId"]
-        self.description = self.__shortening_description(youtube_item["snippet"]["description"])
-        self.channel_title = youtube_item["snippet"]["channelTitle"]
+        self.title: str = youtube_item["snippet"]["title"]
+        self.vid: str = youtube_item["id"]["videoId"] if type(youtube_item["id"]) is dict else youtube_item["id"]
         self.published_at = datetime.fromisoformat(youtube_item["snippet"]["publishedAt"].replace("Z", "+00:00"))
-        self.thumbnail_url = youtube_item["snippet"]["thumbnails"]["default"]["url"]
         self.damage = self.__get_damage()
 
     def url(self) -> str:
         return f"https://www.youtube.com/watch?v={self.vid}"
 
-    def __get_damage(self):
-        ext_dmgs = re.findall(r"\d[,\d]{1,2}\d{2,}(?![年s])", self.title)
+    def __get_damage(self) -> int:
+        ext_dmgs = re.findall(r"\d[,\d]{1,2}\d{2,}(?![年s/])", self.title)
         if len(ext_dmgs) > 0:
             return max([int(re.sub("[,]", "", d)) for d in ext_dmgs])
         else:
             return -1
 
-    def __shortening_description(self, desc):
-        return re.sub(r"https://discordapp.com/channels/[/\d]+", "https://discordapp.com/channels/...", desc)
+
+class TLVideoDetail(TLVideo):
+    def __init__(self, youtube_item) -> None:
+        super().__init__(youtube_item)
+        self.description: str = youtube_item["snippet"]["description"]
+        self.channel_title: str = youtube_item["snippet"]["channelTitle"]
+        self.thumbnail_url: str = youtube_item["snippet"]["thumbnails"]["medium"]["url"]
+        self.party = self.__get_party()
+
+    def __get_party(self) -> str:
+        desc_lines = self.description.splitlines()
+        party_index = -1
+        party_regex = re.compile("パーティ編成")
+        for i, line in enumerate(desc_lines):
+            if party_regex.search(line) is not None:
+                party_index = i + 1
+                break
+        if party_index > 0 and len(desc_lines) - party_index >= 5:
+            party_members = [line for line in desc_lines[party_index : party_index + 5]]
+            return "\n".join(party_members)
+
+        party_members = [line for line in desc_lines if re.search(r"[★☆星]\d(\s|　)*(Lv|lv|最強)", line)]
+        if len(party_members) >= 5:
+            return "\n".join(party_members[:5])
+        else:
+            return "編成の取得に失敗しました"
 
 
-def create_video_embed(video: TLVideo, updated_at: datetime) -> discord.Embed:
+def create_video_embed(video: TLVideoDetail, updated_at: datetime) -> discord.Embed:
     pub_at_jp = video.published_at.astimezone(timezone(timedelta(hours=9)))
     pub_at_jp_str = pub_at_jp.strftime("%Y/%m/%d %H:%M:%S")
     embed = discord.Embed(
@@ -330,7 +368,7 @@ def create_video_embed(video: TLVideo, updated_at: datetime) -> discord.Embed:
     embed.add_field(name="ダメージ", value=f"{video.damage}万")
     embed.add_field(name="チャンネル", value=video.channel_title)
     embed.add_field(name="投稿日時", value=pub_at_jp_str)
-    embed.set_footer(text=video.description)
+    embed.add_field(name="パーティ編成", value=video.party)
     embed.set_thumbnail(url=video.thumbnail_url)
     return embed
 
@@ -347,9 +385,8 @@ def select_api_key():
     return key_next
 
 
-def youtube_search(query: str, api_key: str, page_token=None) -> list[TLVideo]:
+def youtube_search(query: str, published_after: datetime, api_key: str, page_token=None) -> list[TLVideo]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
-    published_after = datetime.now() - timedelta(days=10.0)
 
     # Call the search.list method to retrieve results matching the specified
     # query term.
@@ -373,7 +410,28 @@ def youtube_search(query: str, api_key: str, page_token=None) -> list[TLVideo]:
 
     next_page_token = search_response.get("nextPageToken")
     if next_page_token:
-        next_videos = youtube_search(query=query, api_key=api_key, page_token=next_page_token)
+        next_videos = youtube_search(
+            query=query, published_after=published_after, api_key=api_key, page_token=next_page_token
+        )
         videos += next_videos
+
+    return videos
+
+
+def get_youtube_videos(vid_list: list[str], api_key: str) -> list[TLVideoDetail]:
+    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
+    videos_response = (
+        youtube.videos()
+        .list(
+            part="id,snippet",
+            id=",".join(vid_list),
+            maxResults=50,
+        )
+        .execute()
+    )
+
+    videos = [
+        TLVideoDetail(result) for result in videos_response.get("items", []) if result["kind"] == "youtube#video"
+    ]
 
     return videos
