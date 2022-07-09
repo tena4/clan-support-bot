@@ -1,5 +1,5 @@
 from collections import namedtuple
-from datetime import date
+from datetime import date, datetime
 from logging import getLogger
 from typing import Optional
 
@@ -16,7 +16,7 @@ SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id
 AttackReportRegister = namedtuple("AttackReportRegister", ("guild_id", "channel_id", "last_published"))
 ClanBattleSchedule = namedtuple("ClanBattleSchedule", ("start_date", "end_date"))
 TLVideoNotify = namedtuple("TLVideoNotify", ("guild_id", "channel_id"))
-TLVideoGotten = namedtuple("TLVideoGotten", ("video_id"))
+TLVideoGotten = namedtuple("TLVideoGotten", ("video_id", "published_at", "boss_number"))
 ClanMemberRole = namedtuple("ClanMemberRole", ("guild_id", "role_id"))
 
 
@@ -91,7 +91,12 @@ def __create_tl_video_notify(conn):
 
 def __create_tl_video_gotten(conn):
     with conn.cursor() as cur:
-        cur.execute(("CREATE TABLE IF NOT EXISTS tl_video_gotten" "(video_id varchar(32) PRIMARY KEY);"))
+        cur.execute(
+            (
+                "CREATE TABLE IF NOT EXISTS tl_video_gotten"
+                "(video_id varchar(32) PRIMARY KEY, published_at timestamp, boss_number integer);"
+            )
+        )
 
 
 def __create_clan_member_role(conn):
@@ -255,23 +260,33 @@ def remove_tl_video_notify(guild_id: int, channel_id: int):
             )
 
 
-def get_tl_video_gotten_list() -> list[TLVideoGotten]:
+def get_tl_video_gotten_list(published_after: datetime, boss_number: int) -> list[TLVideoGotten]:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT video_id FROM tl_video_gotten;")
+
+            cur.execute(
+                (
+                    "SELECT video_id, published_at, boss_number FROM tl_video_gotten "
+                    "WHERE published_at > %s AND boss_number = %s;"
+                ),
+                (published_after.isoformat(" ", "seconds"), boss_number),
+            )
             records = cur.fetchall()
-            gotten_list = [TLVideoGotten(record[0]) for record in records]
+            gotten_list = [TLVideoGotten(record[0], record[1], record[2]) for record in records]
             return gotten_list
 
 
-def set_tl_video_gotten_list(video_ids: list[str]):
+def set_tl_video_gotten_list(videos: list[TLVideoGotten]):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            insert_values = [(id,) for id in video_ids]
             extras.execute_values(
                 cur,
-                ("INSERT INTO tl_video_gotten (video_id) VALUES %s;"),
-                (insert_values),
+                (
+                    "INSERT INTO tl_video_gotten (video_id, published_at, boss_number) VALUES %s "
+                    "ON CONFLICT (video_id) "
+                    "DO NOTHING;"
+                ),
+                (videos),
             )
 
 
