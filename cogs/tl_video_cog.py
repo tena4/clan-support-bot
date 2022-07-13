@@ -5,6 +5,7 @@ from http.client import HTTPException
 from logging import ERROR, getLogger
 
 import app_config
+import char
 import discord
 import postgres_helper as pg
 from discord.commands import Option, slash_command
@@ -352,6 +353,13 @@ class TLVideoDetail(TLVideo):
 
         party_members = [line for line in desc_lines if re.search(r"[★☆星]\d(\s|　)*(Lv|lv|最強)", line)]
         if len(party_members) >= 5:
+            return "\n".join(party_members[:5])
+
+        party_members_candidate = set(self.description.split())
+        party_members_candidate = [candi.replace("（", "(").replace("）", ")") for candi in party_members_candidate]
+        party_members = [candi for candi in party_members_candidate if char.is_play_char(candi)]
+        if len(party_members) >= 1:
+            party_members.extend(["???"] * (5 - len(party_members)))
             return "\n".join(party_members[:5])
         else:
             return "編成の取得に失敗しました"

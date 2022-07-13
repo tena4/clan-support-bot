@@ -7,7 +7,7 @@ name = "pypi"
 python-dotenv = "*"
 google-api-python-client = "*"
 psycopg2-binary = "*"
-py-cord = "==2.0.0rc1"
+py-cord = "==2.0.0"
 python-json-logger = "*"
 
 [dev-packages]
