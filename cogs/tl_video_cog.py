@@ -3,6 +3,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from http.client import HTTPException
 from logging import ERROR, getLogger
+from typing import Optional
 
 import app_config
 import char
@@ -45,21 +46,34 @@ class TLVideoCog(commands.Cog):
     async def scheduled_tl_search(self):
         logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
+        query = "({}) 段階目".format(" | ".join([b.name for b in bosses]))
+        api_key = self.get_api_key()
+        search_pub_before = datetime.now(timezone.utc)
+        search_pub_after = search_pub_before - timedelta(hours=12.0)
+        try:
+            logger.info(
+                "get videos by youtube search",
+                extra={"query": query, "published_before": search_pub_before, "published_after": search_pub_after},
+            )
+            search_videos = youtube_search(
+                query=query, published_after=search_pub_after, published_before=search_pub_before, api_key=api_key
+            )
+            logger.info(
+                "got videos by youtube search",
+                extra={"videos_count": len(search_videos)},
+            )
+        except HttpError as e:
+            logger.warn(
+                "http error by youtube search",
+                extra={"status": e.resp.status, "content": e.content},
+            )
+            return
+        except Exception:
+            logger.error("unknown exceptions by youtube search", exc_info=True)
+            return
+
         for boss in bosses:
             await asyncio.sleep(10)
-            query = f"{boss.name} 段階目"
-            api_key = self.get_api_key()
-            try:
-                logger.debug("youtube search", extra={"query": query})
-                search_pub_after = datetime.now() - timedelta(days=1.0)
-                videos = youtube_search(query, search_pub_after, api_key)
-                logger.info(
-                    "get videos by youtube search",
-                    extra={"boss_number": boss.number, "videos_count": len(videos)},
-                )
-            except HttpError as e:
-                logger.warn("An HTTP error %d occurred:\n%s", e.resp.status, e.content)
-                break
 
             other_boss_names = [b.name for b in bosses if b.name not in boss.name]
             boss_regex = re.compile(boss.name)
@@ -67,14 +81,14 @@ class TLVideoCog(commands.Cog):
             ignore_words_regex = re.compile("|".join(IGNORE_WORDS))
             videos = [
                 v
-                for v in videos
+                for v in search_videos
                 if boss_regex.search(v.title) is not None
                 and ignore_boss_regex.search(v.title) is None
                 and ignore_words_regex.search(v.title) is None
                 and v.damage > 0
             ]
 
-            gotten_pub_after = datetime.now() - timedelta(days=10.0)
+            gotten_pub_after = search_pub_before - timedelta(days=10.0)
             gotten_videos = pg.get_tl_video_gotten_list(gotten_pub_after, boss.number)
             gotten_vids = [g.video_id for g in gotten_videos]
             gotten_vids = gotten_vids if gotten_vids is not None else []
@@ -87,7 +101,26 @@ class TLVideoCog(commands.Cog):
             target_vids = gotten_vids + [v.video_id for v in yet_gotten_videos]
             if not target_vids:
                 continue
-            target_videos = get_youtube_videos(target_vids, api_key)
+            try:
+                logger.info(
+                    "get youtube video",
+                    extra={"video_ids_count": len(target_vids)},
+                )
+                target_videos = get_youtube_videos(target_vids, api_key)
+                logger.info(
+                    "got youtube video",
+                    extra={"video_ids_count": len(target_vids)},
+                )
+            except HttpError as e:
+                logger.warn(
+                    "http error by get youtube video",
+                    extra={"status": e.resp.status, "content": e.content},
+                )
+                continue
+            except Exception:
+                logger.error("unknown exceptions by get youtube video", exc_info=True)
+                continue
+
             target_videos.sort(key=lambda x: x.damage, reverse=True)
             updated_at = datetime.now(timezone(timedelta(hours=9)))
             updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
@@ -393,17 +426,20 @@ def select_api_key():
     return key_next
 
 
-def youtube_search(query: str, published_after: datetime, api_key: str, page_token=None) -> list[TLVideo]:
+def youtube_search(
+    query: str, published_after: datetime, published_before: datetime, api_key: str, page_token: Optional[str] = None
+) -> list[TLVideo]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
 
     # Call the search.list method to retrieve results matching the specified
     # query term.
-    search_response = (
+    response = (
         youtube.search()
         .list(
             q=query,
             part="id,snippet",
-            publishedAfter=published_after.isoformat() + "Z",
+            publishedAfter=published_after.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            publishedBefore=published_before.strftime("%Y-%m-%dT%H:%M:%SZ"),
             order="date",
             type="video",
             maxResults=50,
@@ -412,34 +448,44 @@ def youtube_search(query: str, published_after: datetime, api_key: str, page_tok
         .execute()
     )
 
-    videos = [
-        TLVideo(result) for result in search_response.get("items", []) if result["id"]["kind"] == "youtube#video"
-    ]
+    videos = [TLVideo(result) for result in response.get("items", []) if result["id"]["kind"] == "youtube#video"]
 
-    next_page_token = search_response.get("nextPageToken")
+    next_page_token = response.get("nextPageToken")
     if next_page_token:
         next_videos = youtube_search(
-            query=query, published_after=published_after, api_key=api_key, page_token=next_page_token
+            query=query,
+            published_after=published_after,
+            published_before=published_before,
+            api_key=api_key,
+            page_token=next_page_token,
         )
         videos += next_videos
 
     return videos
 
 
-def get_youtube_videos(vid_list: list[str], api_key: str) -> list[TLVideoDetail]:
+def get_youtube_videos(vid_list: list[str], api_key: str, page_token: Optional[str] = None) -> list[TLVideoDetail]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
-    videos_response = (
+    response = (
         youtube.videos()
         .list(
             part="id,snippet",
             id=",".join(vid_list),
             maxResults=50,
+            pageToken=page_token,
         )
         .execute()
     )
 
-    videos = [
-        TLVideoDetail(result) for result in videos_response.get("items", []) if result["kind"] == "youtube#video"
-    ]
+    videos = [TLVideoDetail(result) for result in response.get("items", []) if result["kind"] == "youtube#video"]
+
+    next_page_token = response.get("nextPageToken")
+    if next_page_token:
+        next_videos = get_youtube_videos(
+            vid_list=vid_list,
+            api_key=api_key,
+            page_token=next_page_token,
+        )
+        videos += next_videos
 
     return videos

@@ -269,7 +269,7 @@ def get_tl_video_gotten_list(published_after: datetime, boss_number: int) -> lis
                     "SELECT video_id, published_at, boss_number FROM tl_video_gotten "
                     "WHERE published_at > %s AND boss_number = %s;"
                 ),
-                (published_after.isoformat(" ", "seconds"), boss_number),
+                (published_after.strftime("%Y-%m-%d %H:%M:%S"), boss_number),
             )
             records = cur.fetchall()
             gotten_list = [TLVideoGotten(record[0], record[1], record[2]) for record in records]
