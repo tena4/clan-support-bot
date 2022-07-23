@@ -63,7 +63,7 @@ class ManageCog(commands.Cog):
     async def SetRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="get_role", description="クランメンバーのロールを登録する")
+    @slash_command(guild_ids=config.guild_ids, name="get_role", description="登録されているクランメンバーのロールを表示する")
     @cmd_log.info("call get role command")
     async def GetRoleCommand(
         self,
