@@ -4,7 +4,7 @@ from logging import getLogger
 
 import app_config
 import discord
-from discord.commands import slash_command
+from discord.commands import Option, slash_command
 from discord.ext import commands
 from log_decorator import CommandLogDecorator
 from mybot import BotClass
@@ -17,6 +17,8 @@ ROOT_DIR = os.getcwd()
 
 
 class FunCog(commands.Cog):
+    max_desc = "乱数の最大値"
+
     def __init__(self, bot: BotClass):
         self.bot = bot
 
@@ -52,6 +54,23 @@ class FunCog(commands.Cog):
     @FlipCommand.error
     @cmd_log.error("flip command error")
     async def FlipCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="random", description="ランダムな値を生成する")
+    @cmd_log.info("call random command")
+    async def RandomCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        max: Option(int, max_desc),
+    ):
+        result = random.randint(0, max)
+        embed = discord.Embed(title=f"random(0~{max}) : **{result}**", colour=discord.Colour.random())
+        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+        await ctx.respond(embed=embed)
+
+    @RandomCommand.error
+    @cmd_log.error("random command error")
+    async def RandomCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
