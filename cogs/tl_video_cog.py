@@ -369,6 +369,9 @@ class TLVideo:
 
     def __get_damage(self) -> int:
         ext_dmgs = re.findall(r"\d{0,2},?\d{3,}(?![年s/])", self.title)
+        ignore_dmg = str(self.published_at.year)
+        if ignore_dmg in ext_dmgs:
+            ext_dmgs.remove(ignore_dmg)
         if len(ext_dmgs) > 0:
             return max([int(re.sub("[,]", "", d)) for d in ext_dmgs])
         else:
