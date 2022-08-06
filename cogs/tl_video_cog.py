@@ -23,11 +23,12 @@ cmd_log = CommandLogDecorator(logger=logger)
 
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
-IGNORE_WORDS = ["Ark", "このファン", "コノファン"]
+IGNORE_WORDS = ["Ark", "このファン", "コノファン", "2段階目", "3段階目"]
 
 
 class TLVideoCog(commands.Cog):
     boss_num_desc = "ボスの番号"
+    is_carry_over_desc = "持ち越し用"
 
     def __init__(self, bot: BotClass):
         self.bot = bot
@@ -36,7 +37,7 @@ class TLVideoCog(commands.Cog):
         self.enabled = len(config.youtube_api_keys) > 0
         if self.enabled:
             self.get_api_key = select_api_key()
-            self.cached_embeds: dict[int, (str, list[discord.Embed])] = {i: () for i in range(1, 6)}
+            self.cached_embeds: dict[str, (str, list[discord.Embed])] = {f"{i//2}_{i%2}": () for i in range(2, 12)}
             self.scheduled_tl_search.start()
 
     def cog_unload(self):
@@ -46,7 +47,7 @@ class TLVideoCog(commands.Cog):
     async def scheduled_tl_search(self):
         logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
-        query = "({}) 段階目".format(" | ".join([b.name for b in bosses]))
+        query = "({}) (段階目 | パーティ編成)".format(" | ".join([f"intitle:{b.name}" for b in bosses]))
         api_key = self.get_api_key()
         search_pub_before = datetime.now(timezone.utc)
         search_pub_after = search_pub_before - timedelta(hours=12.0)
@@ -73,8 +74,6 @@ class TLVideoCog(commands.Cog):
             return
 
         for boss in bosses:
-            await asyncio.sleep(10)
-
             other_boss_names = [b.name for b in bosses if b.name not in boss.name]
             boss_regex = re.compile(boss.name)
             ignore_boss_regex = re.compile("|".join(other_boss_names))
@@ -104,12 +103,12 @@ class TLVideoCog(commands.Cog):
             try:
                 logger.info(
                     "get youtube video",
-                    extra={"video_ids_count": len(target_vids)},
+                    extra={"video_ids_count": len(target_vids), "boss_number": boss.number},
                 )
-                target_videos = get_youtube_videos(target_vids, api_key)
+                target_videos_src = get_youtube_videos(target_vids, api_key)
                 logger.info(
                     "got youtube video",
-                    extra={"video_ids_count": len(target_vids)},
+                    extra={"video_ids_count": len(target_videos_src), "boss_number": boss.number},
                 )
             except HttpError as e:
                 logger.warn(
@@ -121,43 +120,27 @@ class TLVideoCog(commands.Cog):
                 logger.error("unknown exceptions by get youtube video", exc_info=True)
                 continue
 
-            target_videos.sort(key=lambda x: x.damage, reverse=True)
-            updated_at = datetime.now(timezone(timedelta(hours=9)))
-            updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
-            content = f"TL動画対象ボス: {boss.name}\n最終更新日時: {updated_at_str}\nヒット件数: {len(videos)}, ダメージ上位10件を表示"
+            for is_carry_over in [False, True]:
+                await asyncio.sleep(10)
+                target_videos = [
+                    v for v in target_videos_src if bool(re.search(r"(持ち?越|\d\d[s秒])", v.title)) == is_carry_over
+                ]
+                target_videos.sort(key=lambda x: x.damage, reverse=True)
+                updated_at = datetime.now(timezone(timedelta(hours=9)))
+                updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
+                content = f"TL動画対象ボス: {boss.name}"
+                if is_carry_over:
+                    content += " (持ち越し)"
+                content += f"\n最終更新日時: {updated_at_str}\nヒット件数: {len(target_videos)}, ダメージ上位10件を表示"
+                embeds = [create_video_embed(v, updated_at) for v in target_videos[:10]]
+                self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] = (content, embeds)
 
-            embeds = [create_video_embed(v, updated_at) for v in target_videos[:10]]
-            self.cached_embeds[boss.number] = (content, embeds)
-
-            subsc_msgs = pg.get_subsc_messages(boss.number)
-            err_msgs: list[pg.SubscMessage] = []
-            for msg in subsc_msgs:
-                await asyncio.sleep(1)
-                logger.info(
-                    "edit subscribe message for tl videos",
-                    extra={
-                        "boss_number": boss.number,
-                        "guild_id": msg.guild_id,
-                        "channel_id": msg.channel_id,
-                        "message_id": msg.message_id,
-                    },
-                )
-                try:
-                    guild = self.bot.get_guild(msg.guild_id)
-                    if guild is None:
-                        guild = await self.bot.fetch_guild(msg.guild_id)
-                    channel = guild.get_channel(msg.channel_id)
-                    if channel is None:
-                        channel = await guild.fetch_channel(msg.channel_id)
-                    fmsg = await channel.fetch_message(msg.message_id)
-
-                    await fmsg.edit(content=content, embeds=embeds)
-                except discord.NotFound:
-                    err_msgs.append(msg)
-                except HTTPException:
-                    logger.error(
-                        "HTTP exception by edit subscribe message",
-                        exc_info=True,
+                subsc_msgs = pg.get_subsc_messages(boss.number, is_carry_over)
+                err_msgs: list[pg.SubscMessage] = []
+                for msg in subsc_msgs:
+                    await asyncio.sleep(1)
+                    logger.info(
+                        "edit subscribe message for tl videos",
                         extra={
                             "boss_number": boss.number,
                             "guild_id": msg.guild_id,
@@ -165,32 +148,56 @@ class TLVideoCog(commands.Cog):
                             "message_id": msg.message_id,
                         },
                     )
-                except Exception:
-                    logger.error(
-                        "unknown exceptions by edit subscribe message",
-                        exc_info=True,
+                    try:
+                        guild = self.bot.get_guild(msg.guild_id)
+                        if guild is None:
+                            guild = await self.bot.fetch_guild(msg.guild_id)
+                        channel = guild.get_channel(msg.channel_id)
+                        if channel is None:
+                            channel = await guild.fetch_channel(msg.channel_id)
+                        fmsg = await channel.fetch_message(msg.message_id)
+
+                        await fmsg.edit(content=content, embeds=embeds)
+                    except discord.NotFound:
+                        err_msgs.append(msg)
+                    except HTTPException:
+                        logger.error(
+                            "HTTP exception by edit subscribe message",
+                            exc_info=True,
+                            extra={
+                                "boss_number": boss.number,
+                                "guild_id": msg.guild_id,
+                                "channel_id": msg.channel_id,
+                                "message_id": msg.message_id,
+                            },
+                        )
+                    except Exception:
+                        logger.error(
+                            "unknown exceptions by edit subscribe message",
+                            exc_info=True,
+                            extra={
+                                "boss_number": boss.number,
+                                "guild_id": msg.guild_id,
+                                "channel_id": msg.channel_id,
+                                "message_id": msg.message_id,
+                            },
+                        )
+
+                for em in err_msgs:
+                    # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
+                    logger.info(
+                        "remove message subscriber",
                         extra={
                             "boss_number": boss.number,
-                            "guild_id": msg.guild_id,
-                            "channel_id": msg.channel_id,
-                            "message_id": msg.message_id,
+                            "guild_id": em.guild_id,
+                            "channel_id": em.channel_id,
+                            "message_id": em.message_id,
                         },
                     )
+                    pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
 
-            for em in err_msgs:
-                # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
-                logger.info(
-                    "remove message subscriber",
-                    extra={
-                        "boss_number": boss.number,
-                        "guild_id": em.guild_id,
-                        "channel_id": em.channel_id,
-                        "message_id": em.message_id,
-                    },
-                )
-                pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
-
-            yet_list = [(i, v) for i, v in enumerate(target_videos) if v.vid not in gotten_vids]
+            target_videos_src.sort(key=lambda x: x.damage, reverse=True)
+            yet_list = [(i, v) for i, v in enumerate(target_videos_src) if v.vid not in gotten_vids]
             if len(yet_list) == 0:
                 continue
             notice_content = "TL動画対象ボス: {}\n通知時ダメージ順位: [{}]".format(
@@ -258,6 +265,7 @@ class TLVideoCog(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
         boss_num: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
+        is_carry_over: Option(bool, is_carry_over_desc),
     ):
         if not self.enabled:
             logger.warn(
@@ -282,16 +290,19 @@ class TLVideoCog(commands.Cog):
             await ctx.respond(f"{boss_num}ボスの情報が登録されていません。", ephemeral=True)
             return
 
-        if self.cached_embeds[boss.number] == ():
-            content = f"TL動画リスト: {boss.name}\n次の定期更新までお待ちください。"
+        if self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] == ():
+            content = f"TL動画対象ボス: {boss.name}"
+            if is_carry_over:
+                content += " (持ち越し)"
+            content += "\n次の定期更新までお待ちください。"
             interact: discord.Interaction = await ctx.respond(content)
             msg = await interact.original_message()
-            pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number)
+            pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over)
         else:
-            content, embeds = self.cached_embeds[boss.number]
+            content, embeds = self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"]
             interact: discord.Interaction = await ctx.respond(content, embeds=embeds)
             msg = await interact.original_message()
-            pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number)
+            pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over)
 
     @ListTLVideosCommand.error
     @cmd_log.error("list tl videos command error")
@@ -357,7 +368,7 @@ class TLVideo:
         return f"https://www.youtube.com/watch?v={self.vid}"
 
     def __get_damage(self) -> int:
-        ext_dmgs = re.findall(r"\d[,\d]{1,2}\d{2,}(?![年s/])", self.title)
+        ext_dmgs = re.findall(r"\d{0,2},?\d{3,}(?![年s/])", self.title)
         if len(ext_dmgs) > 0:
             return max([int(re.sub("[,]", "", d)) for d in ext_dmgs])
         else:
@@ -440,7 +451,7 @@ def youtube_search(
             part="id,snippet",
             publishedAfter=published_after.strftime("%Y-%m-%dT%H:%M:%SZ"),
             publishedBefore=published_before.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            order="date",
+            order="relevance",
             type="video",
             maxResults=50,
             pageToken=page_token,
