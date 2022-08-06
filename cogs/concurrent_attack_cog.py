@@ -103,13 +103,15 @@ class ConcurrentAttackButtonView(View):
             cache_content = self.cache_contents.get(id)
             if cache_content is not None and src_content != cache_content:
                 src_content = cache_content
-            atk_contents = src_content.splitlines()
+            content_lines = src_content.splitlines()
+            atk_lines = content_lines[2:]
             for username in usernames:
                 if note is None:
-                    atk_contents = replace_attacks(atk_contents, username, repl_atk)
+                    atk_lines = replace_attacks(atk_lines, username, repl_atk)
                 else:
-                    atk_contents = add_note(atk_contents, username, note)
-            self.cache_contents[id] = "\n".join(atk_contents)
+                    atk_lines = add_note(atk_lines, username, note)
+            content_lines[2:] = atk_lines
+            self.cache_contents[id] = "\n".join(content_lines)
             dst_content = self.cache_contents[id]
         return dst_content
 
@@ -300,12 +302,24 @@ def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str])
     return repl_atk_list
 
 
-def add_note(atk_list: list[str], username: str, note: str):
+def add_note(atk_list: list[str], username: str, note: str) -> list[str]:
     target_indexes = [i for i, atk in enumerate(atk_list) if re.match(rf".*\s{username} :", atk)]
     for i in target_indexes:
         atk = re.match(rf".*\s{username} :", atk_list[i]).group()
         atk_list[i] = f"{atk} {note}"
-    return atk_list
+    sorted_atk_list = sort_by_damage(atk_list)
+    return sorted_atk_list
+
+
+def sort_by_damage(atk_list: list[str]) -> list[str]:
+    atks = [(atk, re.search(r" : .+$", atk)) for atk in atk_list]
+    atks_with_note = [(atk, re.search(r"\d{3,}", note.group())) for atk, note in atks if note is not None]
+    atks_with_dmg = [(atk, int(dmg.group())) for atk, dmg in atks_with_note if dmg is not None]
+    atks_with_dmg.sort(key=lambda a: a[1], reverse=True)
+    sorted_atks = [atk for atk, _ in atks_with_dmg]
+    atks_without_dmg = [atk for atk in atk_list if atk not in sorted_atks]
+    sorted_atks += atks_without_dmg
+    return sorted_atks
 
 
 def calc_carry_over_permutations(hp: int, input_dmgs: list[int]) -> list[tuple]:
