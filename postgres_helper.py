@@ -12,7 +12,7 @@ logger = getLogger(__name__)
 config = app_config.Config.get_instance()
 
 BossInfo = namedtuple("BossInfo", ("number", "name", "hp"))
-SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id", "boss_number"))
+SubscMessage = namedtuple("SubscMessage", ("guild_id", "channel_id", "message_id", "boss_number", "is_carry_over"))
 AttackReportRegister = namedtuple("AttackReportRegister", ("guild_id", "channel_id", "last_published"))
 ClanBattleSchedule = namedtuple("ClanBattleSchedule", ("start_date", "end_date"))
 TLVideoNotify = namedtuple("TLVideoNotify", ("guild_id", "channel_id"))
@@ -54,7 +54,7 @@ def __create_list_tl_subscribe(conn):
         cur.execute(
             (
                 "CREATE TABLE IF NOT EXISTS list_tl_subscribe"
-                "(guild_id bigint, channel_id bigint, message_id bigint, boss_number integer);"
+                "(guild_id bigint, channel_id bigint, message_id bigint, boss_number integer, is_carry_over boolean);"
             )
         )
 
@@ -137,31 +137,31 @@ def set_boss_info(boss_number: int, name: str, hp: int):
             )
 
 
-def get_subsc_messages(boss_num: int) -> list[SubscMessage]:
+def get_subsc_messages(boss_num: int, is_carry_over: bool) -> list[SubscMessage]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 (
-                    "SELECT guild_id, channel_id, message_id, boss_number "
+                    "SELECT guild_id, channel_id, message_id, boss_number, is_carry_over "
                     "FROM list_tl_subscribe "
-                    "WHERE boss_number = %s;"
+                    "WHERE boss_number = %s AND is_carry_over = %s;"
                 ),
-                (boss_num,),
+                (boss_num, is_carry_over),
             )
             records = cur.fetchall()
-            subsc_msgs = [SubscMessage(g, c, m, b) for g, c, m, b in records]
+            subsc_msgs = [SubscMessage(g, c, m, b, co) for g, c, m, b, co in records]
             return subsc_msgs
 
 
-def set_subsc_message(guild_id: int, channel_id: int, message_id: int, boss_number: int):
+def set_subsc_message(guild_id: int, channel_id: int, message_id: int, boss_number: int, is_carry_over: bool):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 (
-                    "INSERT INTO list_tl_subscribe (guild_id, channel_id, message_id, boss_number) "
-                    "VALUES (%s, %s, %s, %s);"
+                    "INSERT INTO list_tl_subscribe (guild_id, channel_id, message_id, boss_number, is_carry_over) "
+                    "VALUES (%s, %s, %s, %s, %s);"
                 ),
-                (guild_id, channel_id, message_id, boss_number),
+                (guild_id, channel_id, message_id, boss_number, is_carry_over),
             )
 
 
