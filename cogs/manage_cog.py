@@ -3,7 +3,7 @@ from logging import getLogger
 import app_config
 import discord
 import postgres_helper as pg
-from discord.commands import Option, slash_command
+from discord.commands import Option, message_command, slash_command
 from discord.ext import commands
 from log_decorator import CommandLogDecorator
 from mybot import BotClass
@@ -43,6 +43,25 @@ class ManageCog(commands.Cog):
     @DeleteMessageCommand.error
     @cmd_log.error("delete message command error")
     async def DeleteMessageCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @message_command(guild_ids=config.guild_ids, name="del_message")
+    @cmd_log.info("call delete message msg-command")
+    async def DeleteMessageMsgCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        message: discord.Message,
+    ):
+        if message.author.id != self.bot.application_id:
+            await ctx.respond(f"対象メッセージ(ID:{message.id})はbotメッセージではありません。", ephemeral=True)
+            return
+        await message.delete()
+
+        await ctx.respond(f"対象メッセージ(ID:{message.id})を削除しました。", ephemeral=True)
+
+    @DeleteMessageMsgCommand.error
+    @cmd_log.error("delete message msg-command error")
+    async def DeleteMessageMsgCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="set_role", description="クランメンバーのロールを登録する")
