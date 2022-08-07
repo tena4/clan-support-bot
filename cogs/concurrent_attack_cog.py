@@ -64,7 +64,7 @@ class DamageModal(Modal):
         self.message_id = message.id
         self.replace_function = replace_method
         atk_contents = message.content.splitlines()
-        target_attack = [atk for atk in atk_contents[2:] if re.match(rf".*\s{username} :", atk)][0]
+        target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {username} :", atk)][0]
         self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
 
     @cb_log.log("submit a damage modal")
@@ -75,6 +75,24 @@ class DamageModal(Modal):
             self.message_id, refresh_message.content, [self.username], None, damage
         )
         await interaction.response.edit_message(content=repl_content)
+
+
+class UnfreezeModal(Modal):
+    def __init__(self, members: list[discord.Member], boss_content: str) -> None:
+        super().__init__(title=f"{boss_content} 解凍")
+        self.mentions = " ".join([mem.mention for mem in members])
+        self.add_item(
+            InputText(
+                style=discord.InputTextStyle.multiline,
+                label="解凍メッセージ",
+                value=f"{boss_content} 解凍されました。\n",
+            )
+        )
+
+    @cb_log.log("submit a unfreeze modal")
+    async def callback(self, interaction: discord.Interaction):
+        content = self.mentions + "\n" + self.children[0].value
+        await interaction.response.send_message(content=content)
 
 
 class ConcurrentAttackButtonView(View):
@@ -175,7 +193,7 @@ class ConcurrentAttackButtonView(View):
     async def InputDamageButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
         username = interaction.user.display_name
-        matches = [atk for atk in atk_list[2:] if re.match(rf".*\s{username} :", atk)]
+        matches = [atk for atk in atk_list[2:] if re.search(rf"  {username} :", atk)]
         if len(matches) == 1:
             modal = DamageModal(interaction.message, username, self.sync_replace_content)
             await interaction.response.send_modal(modal)
@@ -210,6 +228,15 @@ class ConcurrentAttackButtonView(View):
             pcview.stop()
 
         pcview.on_timeout = child_view_timeout
+
+    @discord.ui.button(style=discord.ButtonStyle.red, label="解凍", emoji="\N{Fire}", custom_id="unfreeze")
+    @btn_log.log("push unfreeze button")
+    async def UnfreezeButton(self, button, interaction: discord.Interaction):
+        atk_list = interaction.message.content.splitlines()
+        members = get_attack_members(atk_list[2:], interaction.guild)
+        boss_content = atk_list[0].split(" ")[0]
+        modal = UnfreezeModal(members=members, boss_content=boss_content)
+        await interaction.response.send_modal(modal)
 
 
 class ConcurrentAttackCog(commands.Cog):
@@ -296,16 +323,16 @@ def setup(bot: BotClass):
 
 
 def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
-    repl_atk_list = [atk for atk in atk_list if not re.match(rf".*\s{username} :.*", atk)]
+    repl_atk_list = [atk for atk in atk_list if not re.search(rf"  {username} :.*", atk)]
     if repl_atk is not None:
         repl_atk_list.append(f"{repl_atk}  {username} :")
     return repl_atk_list
 
 
 def add_note(atk_list: list[str], username: str, note: str) -> list[str]:
-    target_indexes = [i for i, atk in enumerate(atk_list) if re.match(rf".*\s{username} :", atk)]
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} :", atk)]
     for i in target_indexes:
-        atk = re.match(rf".*\s{username} :", atk_list[i]).group()
+        atk = re.search(rf"  {username} :", atk_list[i]).group()
         atk_list[i] = f"{atk} {note}"
     sorted_atk_list = sort_by_damage(atk_list)
     return sorted_atk_list
@@ -320,6 +347,13 @@ def sort_by_damage(atk_list: list[str]) -> list[str]:
     atks_without_dmg = [atk for atk in atk_list if atk not in sorted_atks]
     sorted_atks += atks_without_dmg
     return sorted_atks
+
+
+def get_attack_members(atk_list: list[str], guild: discord.Guild) -> list[str]:
+    user_names = [re.search(r"  .+ :", atk).group()[2:-2] for atk in atk_list if re.search(r"  .+ :", atk)]
+    members = [guild.get_member_named(u) for u in user_names]
+    members = [m for m in members if m is not None]
+    return members
 
 
 def calc_carry_over_permutations(hp: int, input_dmgs: list[int]) -> list[tuple]:
