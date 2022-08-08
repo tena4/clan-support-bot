@@ -64,6 +64,7 @@ class DamageModal(Modal):
         self.message_id = message.id
         self.replace_function = replace_method
         atk_contents = message.content.splitlines()
+        self.boss_str = atk_contents[0].split(" ")[0]
         target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {username} :", atk)][0]
         self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
 
@@ -76,6 +77,17 @@ class DamageModal(Modal):
         )
         await interaction.response.edit_message(content=repl_content)
 
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            attack = re.match(rf".*  {self.username} :", self.children[0].label).group()
+            embed = discord.Embed(
+                title="ダメージ入力しました。", fields=[discord.EmbedField(name=self.boss_str, value=f"{attack} {damage}")]
+            )
+            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+            channel = interaction.guild.get_channel_or_thread(notify.channel_id)
+            channel = channel if channel is not None else await interaction.guild.fetch_channel(notify.channel_id)
+            await channel.send(embed=embed)
+
 
 class UnfreezeModal(Modal):
     def __init__(self, members: list[discord.Member], boss_content: str) -> None:
@@ -85,14 +97,24 @@ class UnfreezeModal(Modal):
             InputText(
                 style=discord.InputTextStyle.multiline,
                 label="解凍メッセージ",
-                value=f"{boss_content} 解凍されました。\n",
+                value=f"{boss_content} \N{Fire}解凍されました。\n",
             )
         )
 
     @cb_log.log("submit a unfreeze modal")
     async def callback(self, interaction: discord.Interaction):
-        content = self.mentions + "\n" + self.children[0].value
-        await interaction.response.send_message(content=content)
+        content = self.mentions
+        embed = discord.Embed(title=self.children[0].value)
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None:
+            await interaction.response.defer()
+            if notify.level >= 1:
+                channel = interaction.guild.get_channel_or_thread(notify.channel_id)
+                channel = channel if channel is not None else await interaction.guild.fetch_channel(notify.channel_id)
+                await channel.send(content=content, embed=embed)
+        else:
+            await interaction.response.send_message(content=content, embed=embed)
 
 
 class ConcurrentAttackButtonView(View):
@@ -133,6 +155,26 @@ class ConcurrentAttackButtonView(View):
             dst_content = self.cache_contents[id]
         return dst_content
 
+    async def send_attack_notify(
+        self, notify_channel_id: int, content: str, attack: str, interaction: discord.Interaction
+    ):
+        boss_match = re.match(r".* 残りHP", content)
+        boss_str = boss_match.group().removesuffix(" 残りHP") if boss_match else "error"
+        embed = discord.Embed(title=f"{boss_str} {attack}で登録しました。")
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        channel = interaction.guild.get_channel_or_thread(notify_channel_id)
+        channel = channel if channel is not None else await interaction.guild.fetch_channel(notify_channel_id)
+        await channel.send(embed=embed)
+
+    async def send_cancel_notify(self, notify_channel_id: int, content: str, interaction: discord.Interaction):
+        boss_match = re.match(r".* 残りHP", content)
+        boss_str = boss_match.group().removesuffix(" 残りHP") if boss_match else "error"
+        embed = discord.Embed(title=f"{boss_str} キャンセルしました。")
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        channel = interaction.guild.get_channel_or_thread(notify_channel_id)
+        channel = channel if channel is not None else await interaction.guild.fetch_channel(notify_channel_id)
+        await channel.send(embed=embed)
+
     # custom_id is required and should be unique for <commands.Bot.add_view>
     # attribute emoji can be used to include emojis which can be default str emoji or str(<:emojiName:int(ID)>)
     # timeout can be used if there is a timeout on the button interaction. Default timeout is set to 180.
@@ -148,6 +190,11 @@ class ConcurrentAttackButtonView(View):
             "　新凸　 物\N{Dagger Knife}",
         )
         await interaction.response.edit_message(content=repl_content)
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            await self.send_attack_notify(
+                notify_channel_id=notify.channel_id, content=repl_content, attack="新凸物理", interaction=interaction
+            )
 
     @discord.ui.button(
         style=discord.ButtonStyle.blurple, label="新凸:魔", emoji="\N{Star Of David}", custom_id="new_magic_attack"
@@ -161,6 +208,11 @@ class ConcurrentAttackButtonView(View):
             "　新凸　 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            await self.send_attack_notify(
+                notify_channel_id=notify.channel_id, content=repl_content, attack="新凸魔法", interaction=interaction
+            )
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="持越:物", emoji="\N{Dagger Knife}", custom_id="carry_physics_attack"
@@ -174,6 +226,11 @@ class ConcurrentAttackButtonView(View):
             "★持越★ 物\N{Dagger Knife}",
         )
         await interaction.response.edit_message(content=repl_content)
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            await self.send_attack_notify(
+                notify_channel_id=notify.channel_id, content=repl_content, attack="持越物理", interaction=interaction
+            )
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="持越:魔", emoji="\N{Star Of David}", custom_id="carry_magic_attack"
@@ -187,6 +244,11 @@ class ConcurrentAttackButtonView(View):
             "★持越★ 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            await self.send_attack_notify(
+                notify_channel_id=notify.channel_id, content=repl_content, attack="持越魔法", interaction=interaction
+            )
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, label="ダメージ入力", custom_id="input_damage")
     @btn_log.log("push input damage attack button")
@@ -210,6 +272,11 @@ class ConcurrentAttackButtonView(View):
             None,
         )
         await interaction.response.edit_message(content=repl_content)
+        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            await self.send_cancel_notify(
+                notify_channel_id=notify.channel_id, content=repl_content, interaction=interaction
+            )
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="代理キャンセル", custom_id="proxy_cancel_attack")
     @btn_log.log("push proxy cancel attack button")
@@ -243,6 +310,7 @@ class ConcurrentAttackCog(commands.Cog):
     boss_num_desc = "ボスの番号"
     hp_desc = "ボスの残りHP(万)"
     dmg_desc = "ダメージ(万)"
+    level_desc = "通知レベル(0~3) 高いほど通知量が多い"
 
     def __init__(self, bot: BotClass):
         self.bot = bot
@@ -315,6 +383,36 @@ class ConcurrentAttackCog(commands.Cog):
     async def CalcCarryOverTimeCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
+    @slash_command(guild_ids=config.guild_ids, name="notify_concurrent_atk_register", description="同時凸の通知を登録する")
+    @cmd_log.info("call notify concurrent attack regisuter command")
+    async def NotifyConcurrentAttackRegisterCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        level: Option(int, level_desc, choices=[0, 1, 2, 3]),
+    ):
+        pg.set_concurrent_attack_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id, level=level)
+        await ctx.respond(f"このチャンネルに同時凸の通知(level={level})を登録しました。", ephemeral=True)
+
+    @NotifyConcurrentAttackRegisterCommand.error
+    @cmd_log.error("call notify concurrent attack regisuter command error")
+    async def NotifyConcurrentAttackRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="notify_concurrent_atk_unregister", description="同時凸の通知を登録解除する")
+    @cmd_log.info("call notify concurrent attack unregister command")
+    async def NotifyConcurrentAttackUnregisterCommand(self, ctx: discord.ApplicationContext):
+        notify = pg.get_concurrent_attack_notify(guild_id=ctx.guild_id)
+        if notify is not None:
+            pg.remove_concurrent_attack_notify(guild_id=notify.guild_id)
+            await ctx.respond(f"同時凸の通知(channel=<#{notify.channel_id}>)を登録解除しました。", ephemeral=True)
+        else:
+            await ctx.respond("このサーバーに同時凸の通知は登録されていません。", ephemeral=True)
+
+    @NotifyConcurrentAttackUnregisterCommand.error
+    @cmd_log.error("call notify concurrent attack unregister command error")
+    async def NotifyConcurrentAttackUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
 
 def setup(bot: BotClass):
     logger.info("Load bot cog from %s", __name__)
@@ -332,7 +430,7 @@ def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str])
 def add_note(atk_list: list[str], username: str, note: str) -> list[str]:
     target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} :", atk)]
     for i in target_indexes:
-        atk = re.search(rf"  {username} :", atk_list[i]).group()
+        atk = re.match(rf".*  {username} :", atk_list[i]).group()
         atk_list[i] = f"{atk} {note}"
     sorted_atk_list = sort_by_damage(atk_list)
     return sorted_atk_list
