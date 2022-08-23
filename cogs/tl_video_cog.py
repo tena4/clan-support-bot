@@ -123,7 +123,9 @@ class TLVideoCog(commands.Cog):
             for is_carry_over in [False, True]:
                 await asyncio.sleep(10)
                 target_videos = [
-                    v for v in target_videos_src if bool(re.search(r"(持ち?越|\d\d[s秒])", v.title)) == is_carry_over
+                    v
+                    for v in target_videos_src
+                    if boss_regex.search(v.title) and bool(re.search(r"(持ち?越|\d\d[s秒])", v.title)) == is_carry_over
                 ]
                 target_videos.sort(key=lambda x: x.damage, reverse=True)
                 updated_at = datetime.now(timezone(timedelta(hours=9)))
