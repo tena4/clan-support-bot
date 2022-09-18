@@ -4,6 +4,7 @@ import math
 import re
 from logging import getLogger
 from pyclbr import Function
+from string import Template
 from typing import Optional
 
 import app_config
@@ -90,22 +91,34 @@ class DamageModal(Modal):
 
 
 class UnfreezeModal(Modal):
-    def __init__(self, members: list[discord.Member], boss_content: str) -> None:
-        super().__init__(title=f"{boss_content} 解凍")
+    def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
+        super().__init__(title=f"{boss_number}ボス {boss_name} 解凍")
         self.mentions = " ".join([mem.mention for mem in members])
+        temp_msg = pg.get_template_unfreeze_message(guild_id, boss_number)
+        if temp_msg:
+            temp = Template(temp_msg.template)
+            val_map = {"boss_number": boss_number, "boss_name": boss_name}
+            msg = temp.safe_substitute(val_map)
+            img_url = temp_msg.image_url
+        else:
+            msg = ""
+            img_url = ""
         self.add_item(
             InputText(
                 style=discord.InputTextStyle.multiline,
                 label="解凍メッセージ",
-                value=f"{boss_content} \N{Fire}解凍されました。\n",
+                value=msg,
             )
         )
+        self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
 
     @cb_log.log("submit a unfreeze modal")
     async def callback(self, interaction: discord.Interaction):
         content = self.mentions
-        embed = discord.Embed(title=self.children[0].value)
+        embed = discord.Embed(title=self.title, description=self.children[0].value)
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        if self.children[1].value:
+            embed.set_image(url=self.children[1].value)
         notify = pg.get_concurrent_attack_notify(interaction.guild_id)
         if notify is not None:
             await interaction.response.defer()
@@ -302,7 +315,11 @@ class ConcurrentAttackButtonView(View):
         atk_list = interaction.message.content.splitlines()
         members = get_attack_members(atk_list[2:], interaction.guild)
         boss_content = atk_list[0].split(" ")[0]
-        modal = UnfreezeModal(members=members, boss_content=boss_content)
+        boss_number = int(boss_content.split(":")[0])
+        boss_name = boss_content.split(":")[1]
+        modal = UnfreezeModal(
+            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
+        )
         await interaction.response.send_modal(modal)
 
 
@@ -311,6 +328,8 @@ class ConcurrentAttackCog(commands.Cog):
     hp_desc = "ボスの残りHP(万)"
     dmg_desc = "ダメージ(万)"
     level_desc = "通知レベル(0~3) 高いほど通知量が多い"
+    template_desc = "メッセージのテンプレート"
+    img_url_desc = "画像のURL"
 
     def __init__(self, bot: BotClass):
         self.bot = bot
@@ -411,6 +430,42 @@ class ConcurrentAttackCog(commands.Cog):
     @NotifyConcurrentAttackUnregisterCommand.error
     @cmd_log.error("call notify concurrent attack unregister command error")
     async def NotifyConcurrentAttackUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="set_unfreeze_template", description="解凍メッセージのテンプレートを設定する")
+    @cmd_log.info("call set unfreeze template command")
+    async def SetUnfreezeTemplateCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        boss_number: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
+        template: Option(str, template_desc),
+        img_url: Option(str, img_url_desc),
+    ):
+        pg.set_template_unfreeze_message(
+            guild_id=ctx.guild_id, boss_number=boss_number, template=template, image_url=img_url
+        )
+        await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定をしました。", ephemeral=True)
+
+    @SetUnfreezeTemplateCommand.error
+    @cmd_log.error("call set unfreeze template command error")
+    async def SetUnfreezeTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="remove_unfreeze_template", description="解凍メッセージのテンプレート設定を削除する")
+    @cmd_log.info("call remove unfreeze template command")
+    async def RemoveUnfreezeTemplateCommand(
+        self, ctx: discord.ApplicationContext, boss_number: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5])
+    ):
+        temp_msg = pg.get_template_unfreeze_message(guild_id=ctx.guild_id, boss_number=boss_number)
+        if temp_msg is not None:
+            pg.remove_template_unfreeze_message(guild_id=temp_msg.guild_id, boss_number=temp_msg.boss_number)
+            await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定を削除しました。", ephemeral=True)
+        else:
+            await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True)
+
+    @RemoveUnfreezeTemplateCommand.error
+    @cmd_log.error("call remove unfreeze template command error")
+    async def RemoveUnfreezeTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
