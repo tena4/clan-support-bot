@@ -19,6 +19,7 @@ TLVideoNotify = namedtuple("TLVideoNotify", ("guild_id", "channel_id"))
 TLVideoGotten = namedtuple("TLVideoGotten", ("video_id", "published_at", "boss_number"))
 ClanMemberRole = namedtuple("ClanMemberRole", ("guild_id", "role_id"))
 ConcurrentAttackNotify = namedtuple("ConcurrentAttackNotify", ("guild_id", "channel_id", "level"))
+TemplateUnfreezeMessage = namedtuple("TemplateUnfreezeMessage", ("guild_id", "boss_number", "template", "image_url"))
 
 
 def get_connection():
@@ -42,6 +43,7 @@ def db_init():
         __create_tl_video_gotten(conn)
         __create_clan_member_role(conn)
         __create_concurrent_attack_notify(conn)
+        __create_template_unfreeze_message(conn)
 
 
 def __create_boss_info_table(conn):
@@ -112,6 +114,17 @@ def __create_concurrent_attack_notify(conn):
             (
                 "CREATE TABLE IF NOT EXISTS concurrent_attack_notify"
                 "(guild_id bigint PRIMARY KEY, channel_id bigint, level integer);"
+            )
+        )
+
+
+def __create_template_unfreeze_message(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            (
+                "CREATE TABLE IF NOT EXISTS template_unfreeze_message"
+                "(guild_id bigint, boss_number integer, template varchar(256), image_url varchar(256),"
+                "PRIMARY KEY (guild_id, boss_number));"
             )
         )
 
@@ -371,4 +384,43 @@ def remove_concurrent_attack_notify(guild_id: int):
             cur.execute(
                 "DELETE FROM concurrent_attack_notify WHERE guild_id = %s;",
                 (guild_id,),
+            )
+
+
+def get_template_unfreeze_message(guild_id: int, boss_number: int) -> Optional[TemplateUnfreezeMessage]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                (
+                    "SELECT guild_id, boss_number, template, image_url "
+                    "FROM template_unfreeze_message WHERE guild_id = %s AND boss_number = %s;"
+                ),
+                (guild_id, boss_number),
+            )
+            record = cur.fetchone()
+            if record is None:
+                return None
+            return TemplateUnfreezeMessage(record[0], record[1], record[2], record[3])
+
+
+def set_template_unfreeze_message(guild_id: int, boss_number: int, template: str, image_url: str):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                (
+                    "INSERT INTO template_unfreeze_message (guild_id, boss_number, template, image_url)"
+                    "VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (guild_id, boss_number) "
+                    "DO UPDATE SET template = %s, image_url = %s;"
+                ),
+                (guild_id, boss_number, template, image_url, template, image_url),
+            )
+
+
+def remove_template_unfreeze_message(guild_id: int, boss_number: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM template_unfreeze_message WHERE guild_id = %s AND boss_number = %s;",
+                (guild_id, boss_number),
             )
