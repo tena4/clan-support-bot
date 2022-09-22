@@ -145,6 +145,7 @@ class ConcurrentAttackButtonView(View):
         usernames: list[str],
         repl_atk: Optional[str],
         note: Optional[str] = None,
+        is_change_battle_in: bool = False,
     ) -> str:
         async with self.lock_lock:
             lock = self.replace_locks.get(id)
@@ -159,7 +160,9 @@ class ConcurrentAttackButtonView(View):
             content_lines = src_content.splitlines()
             atk_lines = content_lines[2:]
             for username in usernames:
-                if note is None:
+                if is_change_battle_in:
+                    atk_lines = change_battle_in(atk_lines, username)
+                elif note is None:
                     atk_lines = replace_attacks(atk_lines, username, repl_atk)
                 else:
                     atk_lines = add_note(atk_lines, username, note)
@@ -262,6 +265,18 @@ class ConcurrentAttackButtonView(View):
             await self.send_attack_notify(
                 notify_channel_id=notify.channel_id, content=repl_content, attack="持越魔法", interaction=interaction
             )
+
+    @discord.ui.button(style=discord.ButtonStyle.gray, label="本戦", emoji="\N{Ship}", custom_id="declaration")
+    @btn_log.log("push declaration button")
+    async def DeclarationButton(self, button, interaction: discord.Interaction):
+        repl_content = await self.sync_replace_content(
+            interaction.message.id,
+            interaction.message.content,
+            [interaction.user.display_name],
+            repl_atk=None,
+            is_change_battle_in=True,
+        )
+        await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(style=discord.ButtonStyle.secondary, label="ダメージ入力", custom_id="input_damage")
     @btn_log.log("push input damage attack button")
@@ -473,6 +488,18 @@ def setup(bot: BotClass):
     logger.info("Load bot cog from %s", __name__)
     bot.add_cog(ConcurrentAttackCog(bot))
     bot.persistent_view_classes.add(ConcurrentAttackButtonView)
+
+
+def change_battle_in(atk_list: list[str], username: str) -> list[str]:
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} :.*", atk)]
+    for i in target_indexes:
+        is_battle_in = bool(re.match(rf"本戦 (　新凸　|★持越★).*  {username} :", atk_list[i]))
+        if is_battle_in:
+            atk = re.search(rf"(　新凸　|★持越★).*  {username} :.*$", atk_list[i]).group()
+            atk_list[i] = f"{atk}"
+        else:
+            atk_list[i] = "本戦 " + atk_list[i]
+    return atk_list
 
 
 def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
