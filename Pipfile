@@ -6,9 +6,9 @@ name = "pypi"
 [packages]
 python-dotenv = "*"
 google-api-python-client = "*"
-psycopg2-binary = "*"
 py-cord = "==2.0.0"
 python-json-logger = "*"
+pymongo = {extras = ["srv"], version = "*"}
 
 [dev-packages]
 black = "*"

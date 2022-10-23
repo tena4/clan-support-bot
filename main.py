@@ -1,7 +1,6 @@
 import logging
 
 import app_config
-import postgres_helper as pg
 from log_formatter import CustomJsonFormatter
 from mybot import BotClass
 
@@ -18,8 +17,6 @@ logger.addHandler(handler)
 
 logger.info("bot start")
 logger.debug(config)
-
-pg.db_init()
 
 bot = BotClass()
 
