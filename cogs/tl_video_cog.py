@@ -47,7 +47,7 @@ class TLVideoCog(commands.Cog):
     async def scheduled_tl_search(self):
         logger.info("run scheduled tl search")
         bosses = pg.get_bosses_info()
-        query = "({}) (段階目 | パーティ編成)".format(" | ".join([f"intitle:{b.name}" for b in bosses]))
+        query = "({}) (段階目 | パーティ編成 | プリコネ | 敵UB)".format(" | ".join([f"intitle:{b.name}" for b in bosses]))
         api_key = self.get_api_key()
         search_pub_before = datetime.now(timezone.utc)
         search_pub_after = search_pub_before - timedelta(hours=12.0)
