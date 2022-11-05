@@ -3,7 +3,7 @@ from logging import getLogger
 
 import app_config
 import discord
-import mongo_helper as mongo
+import mongo_data as mongo
 from discord.commands import Option, slash_command
 from discord.ext import commands
 from log_decorator import CommandLogDecorator
