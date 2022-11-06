@@ -1,8 +1,8 @@
 import logging
 
 import app_config
-import postgres_helper as pg
 from log_formatter import CustomJsonFormatter
+from mongo_helper import MongoConn
 from mybot import BotClass
 
 config = app_config.Config.get_instance()
@@ -19,15 +19,21 @@ logger.addHandler(handler)
 logger.info("bot start")
 logger.debug(config)
 
-pg.db_init()
+MongoConn.get_db()
 
-bot = BotClass()
+try:
+    bot = BotClass()
 
-bot.load_extension("cogs.concurrent_attack_cog")
-bot.load_extension("cogs.fun_cog")
-bot.load_extension("cogs.tl_cog")
-bot.load_extension("cogs.tl_video_cog")
-bot.load_extension("cogs.db_cog")
-bot.load_extension("cogs.manage_cog")
-bot.load_extension("cogs.attack_report_cog")
-bot.run(config.bot_token)
+    bot.load_extension("cogs.concurrent_attack_cog")
+    bot.load_extension("cogs.fun_cog")
+    bot.load_extension("cogs.tl_cog")
+    bot.load_extension("cogs.tl_video_cog")
+    bot.load_extension("cogs.db_cog")
+    bot.load_extension("cogs.manage_cog")
+    bot.load_extension("cogs.attack_report_cog")
+    bot.run(config.bot_token)
+
+finally:
+    logger.info("bot closing")
+    MongoConn.close_conn()
+    logger.info("bot closed")

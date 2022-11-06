@@ -3,7 +3,7 @@ from logging import getLogger
 
 import app_config
 import discord
-import postgres_helper as pg
+import mongo_data as mongo
 from discord.commands import Option, slash_command
 from discord.ext import commands
 from log_decorator import CommandLogDecorator
@@ -34,8 +34,8 @@ class DBCog(commands.Cog):
         name: Option(str, name_desc),
         hp: Option(int, hp_desc),
     ):
-        pg.set_boss_info(boss_num, name, hp)
-        boss = pg.get_boss_info(boss_num)
+        mongo.BossInfo(number=boss_num, name=name, hp=hp).Set()
+        boss = mongo.BossInfo.Get(number=boss_num)
         if boss is None:
             await ctx.respond("ボス情報の登録に失敗しました。", ephemeral=True)
             return
@@ -51,7 +51,7 @@ class DBCog(commands.Cog):
     @cmd_log.info("call get bosses command")
     @commands.is_owner()
     async def GetBossesCommand(self, ctx: discord.ApplicationContext):
-        bosses = pg.get_bosses_info()
+        bosses = mongo.BossInfo.Gets()
         embed = discord.Embed(title="ボス情報一覧")
         for boss in bosses:
             embed.add_field(name=f"{boss.number}ボス", value=f"名前:{boss.name}, HP:{boss.hp}(万)", inline=False)
@@ -71,8 +71,10 @@ class DBCog(commands.Cog):
         start_date: Option(str, start_date_desc),
         end_date: Option(str, end_date_desc),
     ):
-        pg.set_clan_battle_schedule(start_date=date.fromisoformat(start_date), end_date=date.fromisoformat(end_date))
-        schedule = pg.get_clan_battle_schedule()
+        mongo.ClanBattleSchedule(
+            start_date=date.fromisoformat(start_date), end_date=date.fromisoformat(end_date)
+        ).Set()
+        schedule = mongo.ClanBattleSchedule.Get()
         if schedule is None:
             await ctx.respond("クランバトル開催期間の登録に失敗しました。", ephemeral=True)
             return
@@ -88,7 +90,7 @@ class DBCog(commands.Cog):
     @cmd_log.info("call get clan battle schedule command")
     @commands.is_owner()
     async def GetClanBattleScheduleCommand(self, ctx: discord.ApplicationContext):
-        schedule = pg.get_clan_battle_schedule()
+        schedule = mongo.ClanBattleSchedule.Get()
         embed = discord.Embed(title="クランバトル開催期間")
         if schedule is not None:
             embed.add_field(name="開始日", value=schedule.start_date)

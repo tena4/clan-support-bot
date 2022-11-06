@@ -2,7 +2,7 @@ from logging import getLogger
 
 import app_config
 import discord
-import postgres_helper as pg
+import mongo_data as mongo
 from discord.commands import Option, message_command, slash_command
 from discord.ext import commands
 from log_decorator import CommandLogDecorator
@@ -74,7 +74,7 @@ class ManageCog(commands.Cog):
         role = ctx.guild.get_role(int(role_id))
         if role is None:
             return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
-        pg.set_clan_member_role(ctx.guild_id, role.id)
+        mongo.ClanMemberRole(guild_id=ctx.guild_id, role_id=role.id).Set()
         return await ctx.respond(f"クランメンバーのロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True)
 
     @SetRoleCommand.error
@@ -88,7 +88,7 @@ class ManageCog(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
-        clan_role = pg.get_clan_member_role(ctx.guild_id)
+        clan_role = mongo.ClanMemberRole.Get(guild_id=ctx.guild_id)
         if clan_role is None:
             return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
 
@@ -106,11 +106,11 @@ class ManageCog(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
-        clan_role = pg.get_clan_member_role(ctx.guild_id)
+        clan_role = mongo.ClanMemberRole.Get(guild_id=ctx.guild_id)
         if clan_role is None:
             return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
 
-        pg.remove_clan_member_role(ctx.guild_id)
+        clan_role.Delete()
         return await ctx.respond(f"クランメンバーのロール(ID:{clan_role.role_id})を登録解除しました。", ephemeral=True)
 
     @RemoveRoleCommand.error

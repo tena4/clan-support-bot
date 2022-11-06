@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 import app_config
 import discord
-import postgres_helper as pg
+import mongo_data as mongo
 from discord.commands import slash_command
 from discord.ext import commands, tasks
 from log_decorator import ButtonLogDecorator, CommandLogDecorator
@@ -83,13 +83,13 @@ class AttarckReportCog(commands.Cog):
     async def scheduled_create_report(self):
         logger.info("run scheduled create report")
         now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
-        cbs = pg.get_clan_battle_schedule()
+        cbs = mongo.ClanBattleSchedule.Get()
         if cbs is None:
             return
         elif now_date >= cbs.start_date and now_date <= cbs.end_date:
             day_index = (now_date - cbs.start_date).days
-            reglist = pg.get_attack_report_register_list()
-            err_channels: list[pg.AttackReportRegister] = []
+            reglist = mongo.AttackReportRegister.Gets()
+            err_reglist: list[mongo.AttackReportRegister] = []
             for reg in reglist:
                 if reg.last_published < now_date:
                     try:
@@ -102,7 +102,7 @@ class AttarckReportCog(commands.Cog):
                         navigator = AttarckReportView()
                         embed = discord.Embed(title="凸完了報告")
                         embed.add_field(name="3凸完了", value="-----")
-                        clan_role = pg.get_clan_member_role(guild_id=reg.guild_id)
+                        clan_role = mongo.ClanMemberRole.Get(guild_id=reg.guild_id)
                         if clan_role is not None:
                             all_members = await guild.fetch_members().flatten()
                             member_names = [
@@ -113,7 +113,7 @@ class AttarckReportCog(commands.Cog):
                         await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
 
                     except discord.NotFound:
-                        err_channels.append(reg)
+                        err_reglist.append(reg)
                     except HTTPException:
                         logger.error(
                             "HTTP exception by create attack report",
@@ -131,25 +131,26 @@ class AttarckReportCog(commands.Cog):
                             },
                         )
                     else:
-                        pg.set_attack_report_register(reg.guild_id, reg.channel_id, now_date)
+                        reg.last_published = now_date
+                        reg.Set()
 
-            for err_ch in err_channels:
-                # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
+            for err_reg in err_reglist:
+                # 対象チャンネルがない(削除された)場合、report_registerから当チャンネルを外す
                 logger.info(
                     "remove attack report register",
                     extra={
-                        "channel_id": err_ch.channel_id,
+                        "channel_id": err_reg.channel_id,
                     },
                 )
-                pg.remove_attack_report_register(err_ch.guild_id, err_ch.channel_id)
+                err_reg.Delete()
 
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する")
     @cmd_log.info("call attack report make auto register command")
     async def AttackReportAutoRegisterCommand(self, ctx: discord.ApplicationContext):
-        reglist = pg.get_attack_report_register_list()
+        reglist = mongo.AttackReportRegister.Gets()
         reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
         if reg is None:
-            pg.set_attack_report_register(ctx.guild.id, ctx.channel.id, date(2020, 1, 1))
+            mongo.AttackReportRegister(ctx.guild.id, ctx.channel.id, date(2020, 1, 1)).Set()
             await ctx.respond("このチャンネルに凸完了報告表の自動作成を登録しました")
         else:
             await ctx.respond("このチャンネルに凸完了報告表の自動作成は既に登録されています", ephemeral=True)
@@ -162,10 +163,10 @@ class AttarckReportCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_unregister", description="凸完了報告表の自動作成の登録を解除する")
     @cmd_log.info("call attack report make auto unregister command")
     async def AttackReportAutoUnregisterCommand(self, ctx: discord.ApplicationContext):
-        reglist = pg.get_attack_report_register_list()
+        reglist = mongo.AttackReportRegister.Gets()
         reg = next(filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, reglist), None)
         if reg is not None:
-            pg.remove_attack_report_register(ctx.guild.id, ctx.channel.id)
+            reg.Delete()
             await ctx.respond("このチャンネルに登録されていた凸完了報告表の自動作成を解除しました")
         else:
             await ctx.respond("このチャンネルに凸完了報告表の自動作成は登録されていません", ephemeral=True)
@@ -181,7 +182,7 @@ class AttarckReportCog(commands.Cog):
         navigator = AttarckReportView()
         embed = discord.Embed(title="凸完了報告")
         embed.add_field(name="3凸完了", value="-----")
-        clan_role = pg.get_clan_member_role(guild_id=ctx.guild_id)
+        clan_role = mongo.ClanMemberRole.Get(guild_id=ctx.guild_id)
         if clan_role is not None:
             all_members = await ctx.guild.fetch_members().flatten()
             member_names = [m.display_name for m in all_members if clan_role.role_id in [r.id for r in m.roles]]

@@ -9,7 +9,7 @@ from typing import Optional
 
 import app_config
 import discord
-import postgres_helper as pg
+import mongo_data as mongo
 from discord.commands import Option, slash_command
 from discord.ext import commands
 from discord.ui import InputText, Modal, Select, View
@@ -78,7 +78,7 @@ class DamageModal(Modal):
         )
         await interaction.response.edit_message(content=repl_content)
 
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
             attack = re.match(rf".*  {self.username} :", self.children[0].label).group()
             embed = discord.Embed(
@@ -94,7 +94,7 @@ class UnfreezeModal(Modal):
     def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
         super().__init__(title=f"{boss_number}ボス {boss_name} 解凍")
         self.mentions = " ".join([mem.mention for mem in members])
-        temp_msg = pg.get_template_unfreeze_message(guild_id, boss_number)
+        temp_msg = mongo.TemplateUnfreezeMessage.Get(guild_id=guild_id, boss_number=boss_number)
         if temp_msg:
             temp = Template(temp_msg.template)
             val_map = {"boss_number": boss_number, "boss_name": boss_name}
@@ -119,7 +119,7 @@ class UnfreezeModal(Modal):
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
         if self.children[1].value:
             embed.set_image(url=self.children[1].value)
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None:
             await interaction.response.defer()
             if notify.level >= 1:
@@ -206,7 +206,7 @@ class ConcurrentAttackButtonView(View):
             "　新凸　 物\N{Dagger Knife}",
         )
         await interaction.response.edit_message(content=repl_content)
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
             await self.send_attack_notify(
                 notify_channel_id=notify.channel_id, content=repl_content, attack="新凸物理", interaction=interaction
@@ -224,7 +224,7 @@ class ConcurrentAttackButtonView(View):
             "　新凸　 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
             await self.send_attack_notify(
                 notify_channel_id=notify.channel_id, content=repl_content, attack="新凸魔法", interaction=interaction
@@ -242,7 +242,7 @@ class ConcurrentAttackButtonView(View):
             "★持越★ 物\N{Dagger Knife}",
         )
         await interaction.response.edit_message(content=repl_content)
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
             await self.send_attack_notify(
                 notify_channel_id=notify.channel_id, content=repl_content, attack="持越物理", interaction=interaction
@@ -260,7 +260,7 @@ class ConcurrentAttackButtonView(View):
             "★持越★ 魔\N{Star Of David}",
         )
         await interaction.response.edit_message(content=repl_content)
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
             await self.send_attack_notify(
                 notify_channel_id=notify.channel_id, content=repl_content, attack="持越魔法", interaction=interaction
@@ -300,7 +300,7 @@ class ConcurrentAttackButtonView(View):
             None,
         )
         await interaction.response.edit_message(content=repl_content)
-        notify = pg.get_concurrent_attack_notify(interaction.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
             await self.send_cancel_notify(
                 notify_channel_id=notify.channel_id, content=repl_content, interaction=interaction
@@ -358,7 +358,7 @@ class ConcurrentAttackCog(commands.Cog):
         hp: Option(int, hp_desc, required=False, default=None),
     ):
         navigator = ConcurrentAttackButtonView()
-        boss = pg.get_boss_info(boss_num)
+        boss = mongo.BossInfo.Get(number=boss_num)
         if boss is None:
             await ctx.respond(f"{boss_num}ボス情報が登録されていません。", ephemeral=True)
             return
@@ -424,7 +424,7 @@ class ConcurrentAttackCog(commands.Cog):
         ctx: discord.ApplicationContext,
         level: Option(int, level_desc, choices=[0, 1, 2, 3]),
     ):
-        pg.set_concurrent_attack_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id, level=level)
+        mongo.ConcurrentAttackNotify(guild_id=ctx.guild_id, channel_id=ctx.channel_id, level=level).Set()
         await ctx.respond(f"このチャンネルに同時凸の通知(level={level})を登録しました。", ephemeral=True)
 
     @NotifyConcurrentAttackRegisterCommand.error
@@ -435,9 +435,9 @@ class ConcurrentAttackCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="notify_concurrent_atk_unregister", description="同時凸の通知を登録解除する")
     @cmd_log.info("call notify concurrent attack unregister command")
     async def NotifyConcurrentAttackUnregisterCommand(self, ctx: discord.ApplicationContext):
-        notify = pg.get_concurrent_attack_notify(guild_id=ctx.guild_id)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=ctx.guild_id)
         if notify is not None:
-            pg.remove_concurrent_attack_notify(guild_id=notify.guild_id)
+            notify.Delete()
             await ctx.respond(f"同時凸の通知(channel=<#{notify.channel_id}>)を登録解除しました。", ephemeral=True)
         else:
             await ctx.respond("このサーバーに同時凸の通知は登録されていません。", ephemeral=True)
@@ -456,9 +456,9 @@ class ConcurrentAttackCog(commands.Cog):
         template: Option(str, template_desc),
         img_url: Option(str, img_url_desc),
     ):
-        pg.set_template_unfreeze_message(
+        mongo.TemplateUnfreezeMessage(
             guild_id=ctx.guild_id, boss_number=boss_number, template=template, image_url=img_url
-        )
+        ).Set()
         await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定をしました。", ephemeral=True)
 
     @SetUnfreezeTemplateCommand.error
@@ -471,9 +471,9 @@ class ConcurrentAttackCog(commands.Cog):
     async def RemoveUnfreezeTemplateCommand(
         self, ctx: discord.ApplicationContext, boss_number: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5])
     ):
-        temp_msg = pg.get_template_unfreeze_message(guild_id=ctx.guild_id, boss_number=boss_number)
+        temp_msg = mongo.TemplateUnfreezeMessage.Get(guild_id=ctx.guild_id, boss_number=boss_number)
         if temp_msg is not None:
-            pg.remove_template_unfreeze_message(guild_id=temp_msg.guild_id, boss_number=temp_msg.boss_number)
+            temp_msg.Delete()
             await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定を削除しました。", ephemeral=True)
         else:
             await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True)

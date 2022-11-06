@@ -8,7 +8,7 @@ from typing import Optional
 import app_config
 import char
 import discord
-import postgres_helper as pg
+import mongo_data as mongo
 from discord.commands import Option, slash_command
 from discord.ext import commands, tasks
 from googleapiclient.discovery import build
@@ -46,7 +46,7 @@ class TLVideoCog(commands.Cog):
     @tasks.loop(minutes=30.0)
     async def scheduled_tl_search(self):
         logger.info("run scheduled tl search")
-        bosses = pg.get_bosses_info()
+        bosses = mongo.BossInfo.Gets()
         query = "({}) (段階目 | パーティ編成 | プリコネ | 敵UB)".format(" | ".join([f"intitle:{b.name}" for b in bosses]))
         api_key = self.get_api_key()
         search_pub_before = datetime.now(timezone.utc)
@@ -88,15 +88,15 @@ class TLVideoCog(commands.Cog):
             ]
 
             gotten_pub_after = search_pub_before - timedelta(days=10.0)
-            gotten_videos = pg.get_tl_video_gotten_list(gotten_pub_after, boss.number)
+            gotten_videos = mongo.TLVideoGotten.Gets(published_after=gotten_pub_after, boss_number=boss.number)
             gotten_vids = [g.video_id for g in gotten_videos]
             gotten_vids = gotten_vids if gotten_vids is not None else []
             yet_gotten_videos = [
-                pg.TLVideoGotten(v.vid, v.published_at, boss.number) for v in videos if v.vid not in gotten_vids
+                mongo.TLVideoGotten(v.vid, v.published_at, boss.number) for v in videos if v.vid not in gotten_vids
             ]
             yet_gotten_videos = yet_gotten_videos if yet_gotten_videos is not None else []
-            if yet_gotten_videos:
-                pg.set_tl_video_gotten_list(yet_gotten_videos)
+            for yet_gv in yet_gotten_videos:
+                yet_gv.Set()
             target_vids = gotten_vids + [v.video_id for v in yet_gotten_videos]
             if not target_vids:
                 continue
@@ -137,8 +137,8 @@ class TLVideoCog(commands.Cog):
                 embeds = [create_video_embed(v, updated_at) for v in target_videos[:10]]
                 self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] = (content, embeds)
 
-                subsc_msgs = pg.get_subsc_messages(boss.number, is_carry_over)
-                err_msgs: list[pg.SubscMessage] = []
+                subsc_msgs = mongo.ListTLSubscMessage.Gets(boss.number, is_carry_over)
+                err_msgs: list[mongo.ListTLSubscMessage] = []
                 for msg in subsc_msgs:
                     await asyncio.sleep(1)
                     logger.info(
@@ -188,7 +188,7 @@ class TLVideoCog(commands.Cog):
                 for em in err_msgs:
                     # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
                     logger.info(
-                        "remove message subscriber",
+                        "remove subscribe message",
                         extra={
                             "boss_number": boss.number,
                             "guild_id": em.guild_id,
@@ -196,7 +196,16 @@ class TLVideoCog(commands.Cog):
                             "message_id": em.message_id,
                         },
                     )
-                    pg.delete_subsc_message(em.guild_id, em.channel_id, em.message_id)
+                    if em.Delete() is False:
+                        logger.warn(
+                            "failed to remove subscribe message",
+                            extra={
+                                "boss_number": boss.number,
+                                "guild_id": em.guild_id,
+                                "channel_id": em.channel_id,
+                                "message_id": em.message_id,
+                            },
+                        )
 
             target_videos_src.sort(key=lambda x: x.damage, reverse=True)
             yet_list = [(i, v) for i, v in enumerate(target_videos_src) if v.vid not in gotten_vids]
@@ -206,8 +215,8 @@ class TLVideoCog(commands.Cog):
                 boss.name, ", ".join([f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list])
             )
             notice_video_embeds = [create_video_embed(v, updated_at) for _, v in yet_list]
-            notify_list = pg.get_tl_video_notify_list()
-            err_notify_list: list[pg.TLVideoNotify] = []
+            notify_list = mongo.TLVideoNotify.Gets()
+            err_notify_list: list[mongo.TLVideoNotify] = []
             for notify in notify_list:
                 await asyncio.sleep(1)
                 logger.info(
@@ -259,7 +268,7 @@ class TLVideoCog(commands.Cog):
                         "channel_id": err_notify.channel_id,
                     },
                 )
-                pg.remove_tl_video_notify(err_notify.guild_id, err_notify.channel_id)
+                err_notify.Delete()
 
     @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
     @cmd_log.info("call list tl videos command")
@@ -280,7 +289,7 @@ class TLVideoCog(commands.Cog):
             await ctx.respond("環境変数の設定が正しくされていません。(YOUTUBE_API_KEY)", ephemeral=True)
             return
 
-        boss = pg.get_boss_info(boss_num)
+        boss = mongo.BossInfo.Get(number=boss_num)
         if boss is None:
             logger.warn(
                 "Misconfiguration of boss info resiger",
@@ -299,12 +308,12 @@ class TLVideoCog(commands.Cog):
             content += "\n次の定期更新までお待ちください。"
             interact: discord.Interaction = await ctx.respond(content)
             msg = await interact.original_message()
-            pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over)
+            mongo.ListTLSubscMessage(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over).Set()
         else:
             content, embeds = self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"]
             interact: discord.Interaction = await ctx.respond(content, embeds=embeds)
             msg = await interact.original_message()
-            pg.set_subsc_message(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over)
+            mongo.ListTLSubscMessage(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over).Set()
 
     @ListTLVideosCommand.error
     @cmd_log.error("list tl videos command error")
@@ -314,9 +323,12 @@ class TLVideoCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_register", description="TL動画の新着通知を登録")
     @cmd_log.info("call list tl videos notify register command")
     async def ListTLVideosNotifyRegisterCommand(self, ctx: discord.ApplicationContext):
-        notify_list = pg.get_tl_video_notify_list()
-        if pg.TLVideoNotify(ctx.guild_id, ctx.channel_id) not in notify_list:
-            pg.set_tl_video_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id)
+        notify_list = mongo.TLVideoNotify.Gets()
+        notify = next(
+            filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, notify_list), None
+        )
+        if notify is None:
+            mongo.TLVideoNotify(guild_id=ctx.guild_id, channel_id=ctx.channel_id).Set()
             return await ctx.respond("通知登録しました。")
         else:
             return await ctx.respond("既に登録されています。", ephemeral=True)
@@ -328,9 +340,12 @@ class TLVideoCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_unregister", description="TL動画の新着通知を登録")
     @cmd_log.info("call list tl videos notify unregister command")
     async def ListTLVideosNotifyUnregisterCommand(self, ctx: discord.ApplicationContext):
-        notify_list = pg.get_tl_video_notify_list()
-        if pg.TLVideoNotify(ctx.guild_id, ctx.channel_id) in notify_list:
-            pg.remove_tl_video_notify(guild_id=ctx.guild_id, channel_id=ctx.channel_id)
+        notify_list = mongo.TLVideoNotify.Gets()
+        notyfy = next(
+            filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, notify_list), None
+        )
+        if notyfy is not None:
+            notyfy.Delete()
             return await ctx.respond("通知登録を解除しました。")
         else:
             return await ctx.respond("登録されていません。", ephemeral=True)
