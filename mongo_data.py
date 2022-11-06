@@ -113,10 +113,11 @@ class AttackReportRegister:
         return [AttackReportRegister(**doc) for doc in docs]
 
     def Set(self) -> None:
+        last_pub_dt = datetime(self.last_published.year, self.last_published.month, self.last_published.day)
         helper.upsert_one(
             self.__clt_name,
             filter={"$and": [{"guild_id": self.guild_id}, {"channel_id": self.channel_id}]},
-            update={"$set": {"last_published": self.last_published}},
+            update={"$set": {"last_published": last_pub_dt}},
         )
 
     def Delete(self) -> bool:
