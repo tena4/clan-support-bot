@@ -26,7 +26,7 @@ cmd_log = CommandLogDecorator(logger=logger)
 class CancelUserSelect(Select):
     def __init__(self, message: discord.Message, replace_method: Function):
         atk_contents = message.content.splitlines()
-        usernames = [re.search("  .* :", atk).group().strip(" :") for atk in atk_contents[2:]]
+        usernames = [re.findall(r"  (.*) 目標\d+万 :", atk)[0] for atk in atk_contents[2:]]
         options = [discord.SelectOption(label=u) for u in usernames]
 
         # The placeholder is what will be shown when no option is chosen
@@ -45,7 +45,7 @@ class CancelUserSelect(Select):
     @cb_log.log("submit a cancel user select")
     async def callback(self, interaction: discord.Interaction):
         refresh_message = await interaction.channel.fetch_message(self.message_id)
-        repl_content = await self.replace_function(self.message_id, refresh_message.content, self.values, None)
+        repl_content = await self.replace_function(self.message_id, refresh_message.content, self.values)
         await refresh_message.edit(content=repl_content)
         await interaction.response.send_message(
             content="下記ユーザーの凸をキャンセルしました。\n{}".format("\n".join(self.values)), ephemeral=True
@@ -66,7 +66,7 @@ class DamageModal(Modal):
         self.replace_function = replace_method
         atk_contents = message.content.splitlines()
         self.boss_str = atk_contents[0].split(" ")[0]
-        target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {username} :", atk)][0]
+        target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {username} 目標\d+万 :", atk)][0]
         self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
 
     @cb_log.log("submit a damage modal")
@@ -74,7 +74,7 @@ class DamageModal(Modal):
         refresh_message = await interaction.channel.fetch_message(self.message_id)
         damage = self.children[0].value
         repl_content = await self.replace_function(
-            self.message_id, refresh_message.content, [self.username], None, damage
+            self.message_id, refresh_message.content, [self.username], note=damage
         )
         await interaction.response.edit_message(content=repl_content)
 
@@ -88,6 +88,45 @@ class DamageModal(Modal):
             channel = interaction.guild.get_channel_or_thread(notify.channel_id)
             channel = channel if channel is not None else await interaction.guild.fetch_channel(notify.channel_id)
             await channel.send(embed=embed)
+
+
+class TargetDamageModal(Modal):
+    def __init__(self, message: discord.Message, username: str, attack_kind: str, replace_method: Function) -> None:
+        super().__init__(title=f"{attack_kind} 目標ダメージ入力")
+        self.username = username
+        self.message_id = message.id
+        self.replace_function = replace_method
+        self.atk_content = message.content
+        self.attack_kind = attack_kind
+        self.add_item(InputText(label="ダメージ(万)", placeholder="1234"))
+
+    @cb_log.log("submit a target damage modal")
+    async def callback(self, interaction: discord.Interaction):
+        repl_content = await self.replace_function(
+            self.message_id,
+            self.atk_content,
+            [self.username],
+            repl_atk=self.attack_kind,
+            target_damage=int(self.children[0].value),
+        )
+        await interaction.response.edit_message(content=repl_content)
+
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
+        if notify is not None and notify.level >= 3:
+            await self.send_attack_notify(
+                notify_channel_id=notify.channel_id, content=repl_content, attack="新凸物理", interaction=interaction
+            )
+
+    async def send_attack_notify(
+        self, notify_channel_id: int, content: str, attack: str, interaction: discord.Interaction
+    ):
+        boss_match = re.match(r".* 残りHP", content)
+        boss_str = boss_match.group().removesuffix(" 残りHP") if boss_match else "error"
+        embed = discord.Embed(title=f"{boss_str} {attack}で登録しました。")
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        channel = interaction.guild.get_channel_or_thread(notify_channel_id)
+        channel = channel if channel is not None else await interaction.guild.fetch_channel(notify_channel_id)
+        await channel.send(embed=embed)
 
 
 class UnfreezeModal(Modal):
@@ -143,7 +182,8 @@ class ConcurrentAttackButtonView(View):
         id: int,
         src_content: str,
         usernames: list[str],
-        repl_atk: Optional[str],
+        repl_atk: Optional[str] = None,
+        target_damage: Optional[int] = None,
         note: Optional[str] = None,
         is_change_battle_in: bool = False,
     ) -> str:
@@ -163,7 +203,7 @@ class ConcurrentAttackButtonView(View):
                 if is_change_battle_in:
                     atk_lines = change_battle_in(atk_lines, username)
                 elif note is None:
-                    atk_lines = replace_attacks(atk_lines, username, repl_atk)
+                    atk_lines = replace_attacks(atk_lines, username, repl_atk, target_damage)
                 else:
                     atk_lines = add_note(atk_lines, username, note)
             content_lines[2:] = atk_lines
@@ -199,72 +239,44 @@ class ConcurrentAttackButtonView(View):
     )
     @btn_log.log("push new physics attack button")
     async def NewPhysicsAttackButton(self, button, interaction: discord.Interaction):
-        repl_content = await self.sync_replace_content(
-            interaction.message.id,
-            interaction.message.content,
-            [interaction.user.display_name],
-            "　新凸　 物\N{Dagger Knife}",
+        attack_kind = "　新凸　 物\N{Dagger Knife}"
+        modal = TargetDamageModal(
+            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
         )
-        await interaction.response.edit_message(content=repl_content)
-        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
-        if notify is not None and notify.level >= 3:
-            await self.send_attack_notify(
-                notify_channel_id=notify.channel_id, content=repl_content, attack="新凸物理", interaction=interaction
-            )
+        await interaction.response.send_modal(modal=modal)
 
     @discord.ui.button(
         style=discord.ButtonStyle.blurple, label="新凸:魔", emoji="\N{Star Of David}", custom_id="new_magic_attack"
     )
     @btn_log.log("push new magic attack button")
     async def NewMagicAttackButton(self, button, interaction: discord.Interaction):
-        repl_content = await self.sync_replace_content(
-            interaction.message.id,
-            interaction.message.content,
-            [interaction.user.display_name],
-            "　新凸　 魔\N{Star Of David}",
+        attack_kind = "　新凸　 魔\N{Star Of David}"
+        modal = TargetDamageModal(
+            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
         )
-        await interaction.response.edit_message(content=repl_content)
-        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
-        if notify is not None and notify.level >= 3:
-            await self.send_attack_notify(
-                notify_channel_id=notify.channel_id, content=repl_content, attack="新凸魔法", interaction=interaction
-            )
+        await interaction.response.send_modal(modal=modal)
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="持越:物", emoji="\N{Dagger Knife}", custom_id="carry_physics_attack"
     )
     @btn_log.log("push carry over physics attack button")
     async def CarryOverPhysicsAttackButton(self, button, interaction: discord.Interaction):
-        repl_content = await self.sync_replace_content(
-            interaction.message.id,
-            interaction.message.content,
-            [interaction.user.display_name],
-            "★持越★ 物\N{Dagger Knife}",
+        attack_kind = "★持越★ 物\N{Dagger Knife}"
+        modal = TargetDamageModal(
+            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
         )
-        await interaction.response.edit_message(content=repl_content)
-        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
-        if notify is not None and notify.level >= 3:
-            await self.send_attack_notify(
-                notify_channel_id=notify.channel_id, content=repl_content, attack="持越物理", interaction=interaction
-            )
+        await interaction.response.send_modal(modal=modal)
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="持越:魔", emoji="\N{Star Of David}", custom_id="carry_magic_attack"
     )
     @btn_log.log("push carry over magic attack button")
     async def CarryOverMagicAttackButton(self, button, interaction: discord.Interaction):
-        repl_content = await self.sync_replace_content(
-            interaction.message.id,
-            interaction.message.content,
-            [interaction.user.display_name],
-            "★持越★ 魔\N{Star Of David}",
+        attack_kind = "★持越★ 魔\N{Star Of David}"
+        modal = TargetDamageModal(
+            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
         )
-        await interaction.response.edit_message(content=repl_content)
-        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
-        if notify is not None and notify.level >= 3:
-            await self.send_attack_notify(
-                notify_channel_id=notify.channel_id, content=repl_content, attack="持越魔法", interaction=interaction
-            )
+        await interaction.response.send_modal(modal=modal)
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="本戦", emoji="\N{Ship}", custom_id="declaration")
     @btn_log.log("push declaration button")
@@ -273,7 +285,6 @@ class ConcurrentAttackButtonView(View):
             interaction.message.id,
             interaction.message.content,
             [interaction.user.display_name],
-            repl_atk=None,
             is_change_battle_in=True,
         )
         await interaction.response.edit_message(content=repl_content)
@@ -283,7 +294,7 @@ class ConcurrentAttackButtonView(View):
     async def InputDamageButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
         username = interaction.user.display_name
-        matches = [atk for atk in atk_list[2:] if re.search(rf"  {username} :", atk)]
+        matches = [atk for atk in atk_list[2:] if re.search(rf"  {username} 目標\d+万 :", atk)]
         if len(matches) == 1:
             modal = DamageModal(interaction.message, username, self.sync_replace_content)
             await interaction.response.send_modal(modal)
@@ -297,7 +308,6 @@ class ConcurrentAttackButtonView(View):
             interaction.message.id,
             interaction.message.content,
             [interaction.user.display_name],
-            None,
         )
         await interaction.response.edit_message(content=repl_content)
         notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
@@ -491,35 +501,37 @@ def setup(bot: BotClass):
 
 
 def change_battle_in(atk_list: list[str], username: str) -> list[str]:
-    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} :.*", atk)]
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} 目標\d+万 :.*", atk)]
     for i in target_indexes:
-        is_battle_in = bool(re.match(rf"本戦 (　新凸　|★持越★).*  {username} :", atk_list[i]))
+        is_battle_in = bool(re.match(rf"本戦 (　新凸　|★持越★).*  {username} 目標\d+万 :", atk_list[i]))
         if is_battle_in:
-            atk = re.search(rf"(　新凸　|★持越★).*  {username} :.*$", atk_list[i]).group()
+            atk = re.search(rf"(　新凸　|★持越★).*  {username} 目標\d+万 :.*$", atk_list[i]).group()
             atk_list[i] = f"{atk}"
         else:
             atk_list[i] = "本戦 " + atk_list[i]
     return atk_list
 
 
-def replace_attacks(atk_list: list[str], username: str, repl_atk: Optional[str]) -> list[str]:
-    repl_atk_list = [atk for atk in atk_list if not re.search(rf"  {username} :.*", atk)]
+def replace_attacks(
+    atk_list: list[str], username: str, repl_atk: Optional[str], target_damage: Optional[int]
+) -> list[str]:
+    repl_atk_list = [atk for atk in atk_list if not re.search(rf"  {username} 目標\d+万 :.*", atk)]
     if repl_atk is not None:
-        repl_atk_list.append(f"{repl_atk}  {username} :")
+        repl_atk_list.append(f"{repl_atk}  {username} 目標{target_damage}万 :")
     return repl_atk_list
 
 
 def add_note(atk_list: list[str], username: str, note: str) -> list[str]:
-    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} :", atk)]
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} 目標\d+万 :", atk)]
     for i in target_indexes:
-        atk = re.match(rf".*  {username} :", atk_list[i]).group()
+        atk = re.match(rf".*  {username} 目標\d+万 :", atk_list[i]).group()
         atk_list[i] = f"{atk} {note}"
     sorted_atk_list = sort_by_damage(atk_list)
     return sorted_atk_list
 
 
 def sort_by_damage(atk_list: list[str]) -> list[str]:
-    atks = [(atk, re.search(r" : .+$", atk)) for atk in atk_list]
+    atks = [(atk, re.search(r"万 : .+$", atk)) for atk in atk_list]
     atks_with_note = [(atk, re.search(r"\d{3,}", note.group())) for atk, note in atks if note is not None]
     atks_with_dmg = [(atk, int(dmg.group())) for atk, dmg in atks_with_note if dmg is not None]
     atks_with_dmg.sort(key=lambda a: a[1], reverse=True)
@@ -530,7 +542,7 @@ def sort_by_damage(atk_list: list[str]) -> list[str]:
 
 
 def get_attack_members(atk_list: list[str], guild: discord.Guild) -> list[str]:
-    user_names = [re.search(r"  .+ :", atk).group()[2:-2] for atk in atk_list if re.search(r"  .+ :", atk)]
+    user_names = [re.findall(r"  (.+) 目標\d+万 :", atk)[0] for atk in atk_list if re.search(r"  .+ 目標\d+万 :", atk)]
     members = [guild.get_member_named(u) for u in user_names]
     members = [m for m in members if m is not None]
     return members
