@@ -311,3 +311,39 @@ class TemplateUnfreezeMessage:
             filter={"$and": [{"guild_id": self.guild_id}, {"boss_number": self.boss_number}]},
         )
         return is_deleted
+
+
+class TemplateAttackStartMessage:
+    __clt_name = "template_attack_start_message"
+
+    def __init__(
+        self, guild_id: int, boss_number: int, template: str, image_url: str, _id: Optional[str] = None
+    ) -> None:
+        self.guild_id = guild_id
+        self.boss_number = boss_number
+        self.template = template
+        self.image_url = image_url
+
+    @classmethod
+    def Get(cls, guild_id: int, boss_number: int) -> Optional[TemplateAttackStartMessage]:
+        doc = helper.get_one(
+            cls.__clt_name,
+            filter={"$and": [{"guild_id": guild_id}, {"boss_number": boss_number}]},
+        )
+        if doc is None:
+            return None
+        return TemplateAttackStartMessage(**doc)
+
+    def Set(self) -> None:
+        helper.upsert_one(
+            self.__clt_name,
+            filter={"$and": [{"guild_id": self.guild_id}, {"boss_number": self.boss_number}]},
+            update={"$set": {"template": self.template, "image_url": self.image_url}},
+        )
+
+    def Delete(self) -> bool:
+        is_deleted = helper.delete_one(
+            self.__clt_name,
+            filter={"$and": [{"guild_id": self.guild_id}, {"boss_number": self.boss_number}]},
+        )
+        return is_deleted
