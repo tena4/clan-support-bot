@@ -2,6 +2,7 @@ import asyncio
 import itertools
 import math
 import re
+from datetime import datetime, timedelta
 from logging import getLogger
 from pyclbr import Function
 from string import Template
@@ -129,9 +130,65 @@ class TargetDamageModal(Modal):
         await channel.send(embed=embed)
 
 
+class AttackStartModal(Modal):
+    def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
+        super().__init__(title=f"{boss_number}ボス {boss_name} 同時凸開始")
+        self.boss_number = boss_number
+        self.mentions = " ".join([mem.mention for mem in members])
+        temp_msg = mongo.TemplateAttackStartMessage.Get(guild_id=guild_id, boss_number=boss_number)
+        if temp_msg:
+            temp = Template(temp_msg.template)
+            val_map = {"boss_number": boss_number, "boss_name": boss_name}
+            msg = temp.safe_substitute(val_map)
+            img_url = temp_msg.image_url
+        else:
+            msg = ""
+            img_url = ""
+        self.add_item(
+            InputText(
+                style=discord.InputTextStyle.multiline,
+                label="開始メッセージ",
+                value=msg,
+                required=False,
+            )
+        )
+        self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
+
+    @cb_log.log("submit a attack start modal")
+    async def callback(self, interaction: discord.Interaction):
+        content = self.mentions
+        embed = discord.Embed(title=self.title, description=self.children[0].value)
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        if self.children[1].value:
+            embed.set_image(url=self.children[1].value)
+        notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
+        if notify is not None:
+            await interaction.response.defer()
+            if notify.level >= 1:
+                channel = interaction.guild.get_channel_or_thread(notify.channel_id)
+                channel = channel if channel is not None else await interaction.guild.fetch_channel(notify.channel_id)
+                await channel.send(content=content, embed=embed)
+        else:
+            await interaction.response.send_message(content=content, embed=embed)
+
+        guild = interaction.guild
+        if guild is not None:
+            event_title = f"{self.boss_number}ボス 同時凸中"
+            already_event = next(filter(lambda se: se.name == event_title, guild.scheduled_events), None)
+            if already_event is None:
+                start_time = datetime.utcnow() + timedelta(minutes=1)
+                end_time = start_time + timedelta(hours=1)
+                event: Optional[discord.ScheduledEvent] = await guild.create_scheduled_event(
+                    name=event_title, start_time=start_time, end_time=end_time, location=interaction.message.jump_url
+                )
+                if event is not None:
+                    await event.start()
+
+
 class UnfreezeModal(Modal):
     def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
         super().__init__(title=f"{boss_number}ボス {boss_name} 解凍")
+        self.boss_number = boss_number
         self.mentions = " ".join([mem.mention for mem in members])
         temp_msg = mongo.TemplateUnfreezeMessage.Get(guild_id=guild_id, boss_number=boss_number)
         if temp_msg:
@@ -147,6 +204,7 @@ class UnfreezeModal(Modal):
                 style=discord.InputTextStyle.multiline,
                 label="解凍メッセージ",
                 value=msg,
+                required=False,
             )
         )
         self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
@@ -167,6 +225,13 @@ class UnfreezeModal(Modal):
                 await channel.send(content=content, embed=embed)
         else:
             await interaction.response.send_message(content=content, embed=embed)
+
+        guild = interaction.guild
+        if guild is not None:
+            event_title = f"{self.boss_number}ボス 同時凸中"
+            already_event = next(filter(lambda se: se.name == event_title, guild.scheduled_events), None)
+            if already_event is not None:
+                await already_event.delete()
 
 
 class ConcurrentAttackButtonView(View):
@@ -334,6 +399,21 @@ class ConcurrentAttackButtonView(View):
 
         pcview.on_timeout = child_view_timeout
 
+    @discord.ui.button(
+        style=discord.ButtonStyle.red, label="開始", emoji="\N{Public Address Loudspeaker}", custom_id="attack_start"
+    )
+    @btn_log.log("push attack start button")
+    async def AttackStartButton(self, button, interaction: discord.Interaction):
+        atk_list = interaction.message.content.splitlines()
+        members = get_attack_members(atk_list[2:], interaction.guild)
+        boss_content = atk_list[0].split(" ")[0]
+        boss_number = int(boss_content.split(":")[0])
+        boss_name = boss_content.split(":")[1]
+        modal = AttackStartModal(
+            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
+        )
+        await interaction.response.send_modal(modal)
+
     @discord.ui.button(style=discord.ButtonStyle.red, label="解凍", emoji="\N{Fire}", custom_id="unfreeze")
     @btn_log.log("push unfreeze button")
     async def UnfreezeButton(self, button, interaction: discord.Interaction):
@@ -491,6 +571,44 @@ class ConcurrentAttackCog(commands.Cog):
     @RemoveUnfreezeTemplateCommand.error
     @cmd_log.error("call remove unfreeze template command error")
     async def RemoveUnfreezeTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=config.guild_ids, name="set_attack_start_template", description="凸開始メッセージのテンプレートを設定する")
+    @cmd_log.info("call set attack start template command")
+    async def SetAttackStartTemplateCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        boss_number: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5]),
+        template: Option(str, template_desc),
+        img_url: Option(str, img_url_desc),
+    ):
+        mongo.TemplateAttackStartMessage(
+            guild_id=ctx.guild_id, boss_number=boss_number, template=template, image_url=img_url
+        ).Set()
+        await ctx.respond(f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定をしました。", ephemeral=True)
+
+    @SetAttackStartTemplateCommand.error
+    @cmd_log.error("call set attack start template command error")
+    async def SetAttackStartTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(
+        guild_ids=config.guild_ids, name="remove_attack_start_template", description="凸開始メッセージのテンプレート設定を削除する"
+    )
+    @cmd_log.info("call remove attack start template command")
+    async def RemoveAttackStartTemplateCommand(
+        self, ctx: discord.ApplicationContext, boss_number: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5])
+    ):
+        temp_msg = mongo.TemplateUnfreezeMessage.Get(guild_id=ctx.guild_id, boss_number=boss_number)
+        if temp_msg is not None:
+            temp_msg.Delete()
+            await ctx.respond(f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定を削除しました。", ephemeral=True)
+        else:
+            await ctx.respond(f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True)
+
+    @RemoveAttackStartTemplateCommand.error
+    @cmd_log.error("call remove attack start template command error")
+    async def RemoveAttackStartTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
