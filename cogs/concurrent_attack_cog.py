@@ -343,7 +343,7 @@ class ConcurrentAttackButtonView(View):
         )
         await interaction.response.send_modal(modal=modal)
 
-    @discord.ui.button(style=discord.ButtonStyle.gray, label="本戦", emoji="\N{Ship}", custom_id="declaration")
+    @discord.ui.button(style=discord.ButtonStyle.gray, label="本戦", emoji="\N{Ship}", custom_id="declaration", row=2)
     @btn_log.log("push declaration button")
     async def DeclarationButton(self, button, interaction: discord.Interaction):
         repl_content = await self.sync_replace_content(
@@ -354,7 +354,9 @@ class ConcurrentAttackButtonView(View):
         )
         await interaction.response.edit_message(content=repl_content)
 
-    @discord.ui.button(style=discord.ButtonStyle.secondary, label="ダメージ入力", custom_id="input_damage")
+    @discord.ui.button(
+        style=discord.ButtonStyle.secondary, label="ダメ入力", emoji="\N{Memo}", custom_id="input_damage", row=2
+    )
     @btn_log.log("push input damage attack button")
     async def InputDamageButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
@@ -366,7 +368,9 @@ class ConcurrentAttackButtonView(View):
         else:
             await interaction.response.send_message("対象凸がありません。", ephemeral=True)
 
-    @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="cancel_attack")
+    @discord.ui.button(
+        style=discord.ButtonStyle.danger, label="取消", emoji="\N{Roll of Paper}", custom_id="cancel_attack", row=2
+    )
     @btn_log.log("push cancel attack button")
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
         repl_content = await self.sync_replace_content(
@@ -381,7 +385,41 @@ class ConcurrentAttackButtonView(View):
                 notify_channel_id=notify.channel_id, content=repl_content, interaction=interaction
             )
 
-    @discord.ui.button(style=discord.ButtonStyle.gray, label="代理キャンセル", custom_id="proxy_cancel_attack")
+    @discord.ui.button(
+        style=discord.ButtonStyle.green,
+        label="同凸開始",
+        emoji="\N{Public Address Loudspeaker}",
+        custom_id="attack_start",
+        row=3,
+    )
+    @btn_log.log("push attack start button")
+    async def AttackStartButton(self, button, interaction: discord.Interaction):
+        atk_list = interaction.message.content.splitlines()
+        members = get_attack_members(atk_list[2:], interaction.guild)
+        boss_content = atk_list[0].split(" ")[0]
+        boss_number = int(boss_content.split(":")[0])
+        boss_name = boss_content.split(":")[1]
+        modal = AttackStartModal(
+            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
+        )
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(style=discord.ButtonStyle.red, label="解凍", emoji="\N{Fire}", custom_id="unfreeze", row=3)
+    @btn_log.log("push unfreeze button")
+    async def UnfreezeButton(self, button, interaction: discord.Interaction):
+        atk_list = interaction.message.content.splitlines()
+        members = get_attack_members(atk_list[2:], interaction.guild)
+        boss_content = atk_list[0].split(" ")[0]
+        boss_number = int(boss_content.split(":")[0])
+        boss_name = boss_content.split(":")[1]
+        modal = UnfreezeModal(
+            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
+        )
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(
+        style=discord.ButtonStyle.gray, label="代消", emoji="\N{Toilet}", custom_id="proxy_cancel_attack", row=3
+    )
     @btn_log.log("push proxy cancel attack button")
     async def ProxyCancelAttackButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
@@ -398,34 +436,6 @@ class ConcurrentAttackButtonView(View):
             pcview.stop()
 
         pcview.on_timeout = child_view_timeout
-
-    @discord.ui.button(
-        style=discord.ButtonStyle.red, label="開始", emoji="\N{Public Address Loudspeaker}", custom_id="attack_start"
-    )
-    @btn_log.log("push attack start button")
-    async def AttackStartButton(self, button, interaction: discord.Interaction):
-        atk_list = interaction.message.content.splitlines()
-        members = get_attack_members(atk_list[2:], interaction.guild)
-        boss_content = atk_list[0].split(" ")[0]
-        boss_number = int(boss_content.split(":")[0])
-        boss_name = boss_content.split(":")[1]
-        modal = AttackStartModal(
-            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
-        )
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(style=discord.ButtonStyle.red, label="解凍", emoji="\N{Fire}", custom_id="unfreeze")
-    @btn_log.log("push unfreeze button")
-    async def UnfreezeButton(self, button, interaction: discord.Interaction):
-        atk_list = interaction.message.content.splitlines()
-        members = get_attack_members(atk_list[2:], interaction.guild)
-        boss_content = atk_list[0].split(" ")[0]
-        boss_number = int(boss_content.split(":")[0])
-        boss_name = boss_content.split(":")[1]
-        modal = UnfreezeModal(
-            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
-        )
-        await interaction.response.send_modal(modal)
 
 
 class ConcurrentAttackCog(commands.Cog):
