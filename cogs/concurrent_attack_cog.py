@@ -296,54 +296,29 @@ class ConcurrentAttackButtonView(View):
         channel = channel if channel is not None else await interaction.guild.fetch_channel(notify_channel_id)
         await channel.send(embed=embed)
 
+    @discord.ui.select(
+        placeholder="凸内容を選択",
+        custom_id="attack_select",
+        options=[
+            discord.SelectOption(label="新凸 物理", emoji="\N{Dagger Knife}", value="　新凸　 物\N{Dagger Knife}"),
+            discord.SelectOption(label="新凸 魔法", emoji="\N{Star Of David}", value="　新凸　 魔\N{Star Of David}"),
+            discord.SelectOption(label="持越 物理", emoji="\N{Dagger Knife}", value="★持越★ 物\N{Dagger Knife}"),
+            discord.SelectOption(label="持越 魔法", emoji="\N{Star Of David}", value="★持越★ 魔\N{Star Of David}"),
+        ],
+    )
+    async def AttackSelectCallback(self, select: discord.ui.Select, interaction: discord.Interaction):
+        attack_kind = select.values[0]
+        modal = TargetDamageModal(
+            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
+        )
+        await interaction.response.send_modal(modal=modal)
+
     # custom_id is required and should be unique for <commands.Bot.add_view>
     # attribute emoji can be used to include emojis which can be default str emoji or str(<:emojiName:int(ID)>)
     # timeout can be used if there is a timeout on the button interaction. Default timeout is set to 180.
     @discord.ui.button(
-        style=discord.ButtonStyle.blurple, label="新凸:物", emoji="\N{Dagger Knife}", custom_id="new_physics_attack"
+        style=discord.ButtonStyle.blurple, label="本戦", emoji="\N{Airplane}", custom_id="declaration", row=2
     )
-    @btn_log.log("push new physics attack button")
-    async def NewPhysicsAttackButton(self, button, interaction: discord.Interaction):
-        attack_kind = "　新凸　 物\N{Dagger Knife}"
-        modal = TargetDamageModal(
-            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
-        )
-        await interaction.response.send_modal(modal=modal)
-
-    @discord.ui.button(
-        style=discord.ButtonStyle.blurple, label="新凸:魔", emoji="\N{Star Of David}", custom_id="new_magic_attack"
-    )
-    @btn_log.log("push new magic attack button")
-    async def NewMagicAttackButton(self, button, interaction: discord.Interaction):
-        attack_kind = "　新凸　 魔\N{Star Of David}"
-        modal = TargetDamageModal(
-            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
-        )
-        await interaction.response.send_modal(modal=modal)
-
-    @discord.ui.button(
-        style=discord.ButtonStyle.green, label="持越:物", emoji="\N{Dagger Knife}", custom_id="carry_physics_attack"
-    )
-    @btn_log.log("push carry over physics attack button")
-    async def CarryOverPhysicsAttackButton(self, button, interaction: discord.Interaction):
-        attack_kind = "★持越★ 物\N{Dagger Knife}"
-        modal = TargetDamageModal(
-            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
-        )
-        await interaction.response.send_modal(modal=modal)
-
-    @discord.ui.button(
-        style=discord.ButtonStyle.green, label="持越:魔", emoji="\N{Star Of David}", custom_id="carry_magic_attack"
-    )
-    @btn_log.log("push carry over magic attack button")
-    async def CarryOverMagicAttackButton(self, button, interaction: discord.Interaction):
-        attack_kind = "★持越★ 魔\N{Star Of David}"
-        modal = TargetDamageModal(
-            interaction.message, interaction.user.display_name, attack_kind, self.sync_replace_content
-        )
-        await interaction.response.send_modal(modal=modal)
-
-    @discord.ui.button(style=discord.ButtonStyle.gray, label="本戦", emoji="\N{Ship}", custom_id="declaration", row=2)
     @btn_log.log("push declaration button")
     async def DeclarationButton(self, button, interaction: discord.Interaction):
         repl_content = await self.sync_replace_content(
@@ -355,7 +330,7 @@ class ConcurrentAttackButtonView(View):
         await interaction.response.edit_message(content=repl_content)
 
     @discord.ui.button(
-        style=discord.ButtonStyle.secondary, label="ダメ入力", emoji="\N{Memo}", custom_id="input_damage", row=2
+        style=discord.ButtonStyle.blurple, label="ダメ入力", emoji="\N{Memo}", custom_id="input_damage", row=2
     )
     @btn_log.log("push input damage attack button")
     async def InputDamageButton(self, button, interaction: discord.Interaction):
@@ -369,7 +344,7 @@ class ConcurrentAttackButtonView(View):
             await interaction.response.send_message("対象凸がありません。", ephemeral=True)
 
     @discord.ui.button(
-        style=discord.ButtonStyle.danger, label="取消", emoji="\N{Roll of Paper}", custom_id="cancel_attack", row=2
+        style=discord.ButtonStyle.red, label="取消", emoji="\N{Roll of Paper}", custom_id="cancel_attack", row=2
     )
     @btn_log.log("push cancel attack button")
     async def CancelAttackButton(self, button, interaction: discord.Interaction):
@@ -404,7 +379,7 @@ class ConcurrentAttackButtonView(View):
         )
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(style=discord.ButtonStyle.red, label="解凍", emoji="\N{Fire}", custom_id="unfreeze", row=3)
+    @discord.ui.button(style=discord.ButtonStyle.green, label="解凍", emoji="\N{Fire}", custom_id="unfreeze", row=3)
     @btn_log.log("push unfreeze button")
     async def UnfreezeButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
