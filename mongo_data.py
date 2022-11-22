@@ -347,3 +347,76 @@ class TemplateAttackStartMessage:
             filter={"$and": [{"guild_id": self.guild_id}, {"boss_number": self.boss_number}]},
         )
         return is_deleted
+
+
+class AttackReport:
+    __clt_name = "attack_report"
+
+    def __init__(
+        self,
+        guild_id: int,
+        target_date: date | datetime,
+        user_id: int,
+        report: str,
+        memo: str,
+        _id: Optional[str] = None,
+    ) -> None:
+        self.guild_id = guild_id
+        self.target_date = date(target_date.year, target_date.month, target_date.day)
+        self.user_id = user_id
+        self.report = report
+        self.memo = memo
+
+    @classmethod
+    def Get(cls, guild_id: int, target_date: date, user_id: int) -> Optional[AttackReport]:
+        target_datetime = datetime(target_date.year, target_date.month, target_date.day)
+        doc = helper.get_one(
+            cls.__clt_name,
+            filter={"$and": [{"guild_id": guild_id}, {"target_date": target_datetime}, {"user_id": user_id}]},
+        )
+        if doc is None:
+            return None
+        return AttackReport(**doc)
+
+    @classmethod
+    def Gets(cls, guild_id: int, target_date: date) -> list[AttackReport]:
+        target_datetime = datetime(target_date.year, target_date.month, target_date.day)
+        docs = helper.get_many(
+            cls.__clt_name,
+            filter={"$and": [{"guild_id": guild_id}, {"target_date": target_datetime}]},
+        )
+        return [AttackReport(**doc) for doc in docs]
+
+    def Set(self) -> None:
+        target_datetime = datetime(self.target_date.year, self.target_date.month, self.target_date.day)
+        helper.upsert_one(
+            self.__clt_name,
+            filter={
+                "$and": [{"guild_id": self.guild_id}, {"target_date": target_datetime}, {"user_id": self.user_id}]
+            },
+            update={"$set": {"report": self.report, "memo": self.memo}},
+        )
+
+    @classmethod
+    def Sets(cls, reports: list[AttackReport]):
+        docs = [
+            {
+                "guild_id": r.guild_id,
+                "target_date": datetime(r.target_date.year, r.target_date.month, r.target_date.day),
+                "user_id": r.user_id,
+                "report": r.report,
+                "memo": r.memo,
+            }
+            for r in reports
+        ]
+        return helper.insert_many(cls.__clt_name, docs=docs)
+
+    def Delete(self) -> bool:
+        target_datetime = datetime(self.target_date.year, self.target_date.month, self.target_date.day)
+        is_deleted = helper.delete_one(
+            self.__clt_name,
+            filter={
+                "$and": [{"guild_id": self.guild_id}, {"target_date": target_datetime}, {"user_id": self.user_id}]
+            },
+        )
+        return is_deleted
