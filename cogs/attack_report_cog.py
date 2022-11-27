@@ -337,6 +337,7 @@ def change_reports(
     target_repo[1].report = repl_repo
     target_repo[1].Set()
     reports[target_repo[0]] = target_repo[1]
+    reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
     repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports]
     repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 
