@@ -24,6 +24,8 @@ btn_log = ButtonLogDecorator(logger=logger)
 cb_log = CallbackLogDecorator(logger=logger)
 cmd_log = CommandLogDecorator(logger=logger)
 
+escape_regexp = re.compile(r"([\(\)\[\]\{\}\.\^\$\*\+\?\\])")
+
 
 class CancelUserSelect(Select):
     def __init__(self, message: discord.Message, replace_method: Function):
@@ -64,11 +66,13 @@ class DamageModal(Modal):
     def __init__(self, message: discord.Message, username: str, replace_method: Function) -> None:
         super().__init__(title="ダメージ入力")
         self.username = username
+        self.re_username = escape_regexp.sub(r"\\\1", username)
         self.message_id = message.id
         self.replace_function = replace_method
         atk_contents = message.content.splitlines()
         self.boss_str = atk_contents[0].split(" ")[0]
-        target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {username} 目標\d+万 :", atk)][0]
+
+        target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {self.re_username} 目標\d+万 :", atk)][0]
         self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
 
     @cb_log.log("submit a damage modal")
@@ -82,7 +86,7 @@ class DamageModal(Modal):
 
         notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
-            attack = re.match(rf".*  {self.username} :", self.children[0].label).group()
+            attack = re.match(rf".*  {self.re_username} 目標\d+万 :", self.children[0].label).group()
             embed = discord.Embed(
                 title="ダメージ入力しました。", fields=[discord.EmbedField(name=self.boss_str, value=f"{attack} {damage}")]
             )
@@ -340,7 +344,8 @@ class ConcurrentAttackButtonView(View):
     async def InputDamageButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
         username = interaction.user.display_name
-        matches = [atk for atk in atk_list[2:] if re.search(rf"  {username} 目標\d+万 :", atk)]
+        re_username = escape_regexp.sub(r"\\\1", username)
+        matches = [atk for atk in atk_list[2:] if re.search(rf"  {re_username} 目標\d+万 :", atk)]
         if len(matches) == 1:
             modal = DamageModal(interaction.message, username, self.sync_replace_content)
             await interaction.response.send_modal(modal)
@@ -598,12 +603,12 @@ def setup(bot: BotClass):
 
 
 def change_battle_in(atk_list: list[str], username: str) -> list[str]:
-    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} 目標\d+万 :.*", atk)]
+    re_username = escape_regexp.sub(r"\\\1", username)
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {re_username} 目標\d+万 :.*", atk)]
     for i in target_indexes:
-        is_battle_in = bool(re.match(rf"本戦 (　新凸　|★持越★).*  {username} 目標\d+万 :", atk_list[i]))
-        if is_battle_in:
-            atk = re.search(rf"(　新凸　|★持越★).*  {username} 目標\d+万 :.*$", atk_list[i]).group()
-            atk_list[i] = f"{atk}"
+        already_battle_in = bool(re.match(r"本戦 ", atk_list[i]))
+        if already_battle_in:
+            atk_list[i] = atk_list[i].removeprefix("本戦 ")
         else:
             atk_list[i] = "本戦 " + atk_list[i]
     return atk_list
@@ -612,16 +617,18 @@ def change_battle_in(atk_list: list[str], username: str) -> list[str]:
 def replace_attacks(
     atk_list: list[str], username: str, repl_atk: Optional[str], target_damage: Optional[int]
 ) -> list[str]:
-    repl_atk_list = [atk for atk in atk_list if not re.search(rf"  {username} 目標\d+万 :.*", atk)]
+    re_username = escape_regexp.sub(r"\\\1", username)
+    repl_atk_list = [atk for atk in atk_list if not re.search(rf"  {re_username} 目標\d+万 :.*", atk)]
     if repl_atk is not None:
         repl_atk_list.append(f"{repl_atk}  {username} 目標{target_damage}万 :")
     return repl_atk_list
 
 
 def add_note(atk_list: list[str], username: str, note: str) -> list[str]:
-    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {username} 目標\d+万 :", atk)]
+    re_username = escape_regexp.sub(r"\\\1", username)
+    target_indexes = [i for i, atk in enumerate(atk_list) if re.search(rf"  {re_username} 目標\d+万 :", atk)]
     for i in target_indexes:
-        atk = re.match(rf".*  {username} 目標\d+万 :", atk_list[i]).group()
+        atk = re.match(rf".*  {re_username} 目標\d+万 :", atk_list[i]).group()
         atk_list[i] = f"{atk} {note}"
     sorted_atk_list = sort_by_damage(atk_list)
     return sorted_atk_list
