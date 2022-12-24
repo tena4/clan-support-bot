@@ -101,6 +101,7 @@ class TargetDamageModal(Modal):
         self.atk_content = message.content
         self.attack_kind = attack_kind
         self.add_item(InputText(label="ダメージ(万)", placeholder="1234"))
+        self.add_item(InputText(label="メモ", required=False))
 
     @cb_log.log("submit a target damage modal")
     async def callback(self, interaction: discord.Interaction):
@@ -110,6 +111,7 @@ class TargetDamageModal(Modal):
             [self.username],
             repl_atk=self.attack_kind,
             target_damage=int(self.children[0].value),
+            note=self.children[1].value,
         )
         await interaction.response.edit_message(content=repl_content)
 
@@ -274,6 +276,8 @@ class ConcurrentAttackButtonView(View):
                 elif note is None:
                     atk_lines = replace_attacks(atk_lines, username, repl_atk, target_damage)
                 else:
+                    if repl_atk is not None:
+                        atk_lines = replace_attacks(atk_lines, username, repl_atk, target_damage)
                     atk_lines = add_note(atk_lines, username, note)
             content_lines[2:] = atk_lines
             self.cache_contents[id] = "\n".join(content_lines)
