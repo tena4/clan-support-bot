@@ -1,10 +1,11 @@
 from logging import getLogger
 
-import app_config
 import discord
-import mongo_data as mongo
 from discord.commands import Option, message_command, slash_command
 from discord.ext import commands
+
+import app_config
+import mongo_data as mongo
 from log_decorator import CommandLogDecorator
 from mybot import BotClass
 
@@ -16,6 +17,7 @@ cmd_log = CommandLogDecorator(logger=logger)
 class ManageCog(commands.Cog):
     message_id_desc = "メッセージのID"
     role_desc = "ロールのID"
+    status_desc = "ステータスメッセージ"
 
     def __init__(self, bot: BotClass):
         self.bot = bot
@@ -116,6 +118,25 @@ class ManageCog(commands.Cog):
     @RemoveRoleCommand.error
     @cmd_log.error("remove role command error")
     async def RemoveRoleCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)
+
+    @slash_command(guild_ids=config.guild_ids, name="set_status", description="[admin]botのステータスメッセージを設定する")
+    @cmd_log.info("call set status command")
+    @commands.is_owner()
+    async def SetStatusCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        status_msg: Option(str, status_desc, required=False, default=None),
+    ):
+        if status_msg:
+            await self.bot.change_presence(activity=discord.Game(name=status_msg))
+        else:
+            await self.bot.change_presence(activity=discord.Game(name=""))
+        return await ctx.respond(f"set status: {status_msg}", ephemeral=True)
+
+    @SetStatusCommand.error
+    @cmd_log.error("set status command error")
+    async def SetStatusCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
 
