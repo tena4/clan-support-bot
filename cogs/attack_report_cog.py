@@ -38,6 +38,9 @@ class MemoModal(Modal):
         self.repo.Set()
         reports = mongo.AttackReport.Gets(self.repo.guild_id, self.repo.target_date)
         reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
+        member = interaction.guild.get_member(self.repo.user_id)
+        if member is None:
+            _ = interaction.guild.fetch_members()
         repo_list = [
             f"{r.report} : {interaction.guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports
         ]
@@ -339,6 +342,10 @@ def change_reports(
     target_repo[1].Set()
     reports[target_repo[0]] = target_repo[1]
     reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
+
+    member = guild.get_member(user_id)
+    if member is None:
+        _ = guild.fetch_members()
     repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports]
     repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 
