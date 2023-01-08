@@ -244,6 +244,38 @@ class ClanMemberRole:
         return is_deleted
 
 
+class YetCompleteRole:
+    __clt_name = "yet_complete_role"
+
+    def __init__(self, guild_id: int, role_id: int, _id: Optional[str] = None) -> None:
+        self.guild_id = guild_id
+        self.role_id = role_id
+
+    @classmethod
+    def Get(cls, guild_id: int) -> Optional[YetCompleteRole]:
+        doc = helper.get_one(
+            cls.__clt_name,
+            filter={"guild_id": guild_id},
+        )
+        if doc is None:
+            return None
+        return YetCompleteRole(**doc)
+
+    def Set(self) -> None:
+        helper.upsert_one(
+            self.__clt_name,
+            filter={"guild_id": self.guild_id},
+            update={"$set": {"role_id": self.role_id}},
+        )
+
+    def Delete(self) -> bool:
+        is_deleted = helper.delete_one(
+            self.__clt_name,
+            filter={"guild_id": self.guild_id},
+        )
+        return is_deleted
+
+
 class ConcurrentAttackNotify:
     __clt_name = "concurrent_attack_notify"
 
