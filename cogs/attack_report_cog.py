@@ -1,20 +1,51 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
 from http.client import HTTPException
 from logging import getLogger
+from typing import Callable
 from zoneinfo import ZoneInfo
 
-import app_config
 import discord
-import mongo_data as mongo
 from discord.commands import slash_command
 from discord.ext import commands, tasks
-from log_decorator import ButtonLogDecorator, CommandLogDecorator
+from discord.ui import InputText, Modal
+
+import app_config
+import mongo_data as mongo
+from log_decorator import ButtonLogDecorator, CallbackLogDecorator, CommandLogDecorator
 from mybot import BotClass
 
 logger = getLogger(__name__)
 config = app_config.Config.get_instance()
 btn_log = ButtonLogDecorator(logger=logger)
 cmd_log = CommandLogDecorator(logger=logger)
+cb_log = CallbackLogDecorator(logger=logger)
+
+EMOJI_YET_ATK = "🍖"
+EMOJI_CMP_ATK = "🦴"
+EMOJI_CARRY = "🍰"
+
+
+class MemoModal(Modal):
+    def __init__(self, repo: mongo.AttackReport, embed: discord.Embed) -> None:
+        super().__init__(title="メモ入力")
+        self.repo = repo
+        self.embed = embed
+        self.add_item(InputText(label="メモ", style=discord.InputTextStyle.singleline, required=False))
+
+    @cb_log.log("submit a memo modal")
+    async def callback(self, interaction: discord.Interaction):
+        self.repo.memo = "" if self.children[0].value is None else self.children[0].value
+        self.repo.Set()
+        reports = mongo.AttackReport.Gets(self.repo.guild_id, self.repo.target_date)
+        reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
+        member = interaction.guild.get_member(self.repo.user_id)
+        if member is None:
+            _ = interaction.guild.fetch_members()
+        repo_list = [
+            f"{r.report} : {interaction.guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports
+        ]
+        self.embed.fields[0].value = "```\n" + "\n".join(repo_list) + "\n```"
+        await interaction.response.edit_message(embed=self.embed)
 
 
 class AttarckReportView(discord.ui.View):
@@ -22,52 +53,127 @@ class AttarckReportView(discord.ui.View):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, label="3凸完了", custom_id="attack_finished")
-    @btn_log.log("push attack finished button")
-    async def AttackFinishedButton(self, button, interaction: discord.Interaction):
-        report_field = next(filter(lambda f: f.name == "3凸完了", interaction.message.embeds[0].fields), None)
-        if report_field is None:
-            return await interaction.response.send_message("error", ephemeral=True)
-        yet_report_field = next(filter(lambda f: f.name == "3凸未完", interaction.message.embeds[0].fields), None)
-        reporters = report_field.value.splitlines()
-        if yet_report_field is not None:
-            yet_reporters = yet_report_field.value.splitlines()
-            if interaction.user.display_name not in (reporters + yet_reporters):
-                return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+    @discord.ui.button(
+        style=discord.ButtonStyle.gray, label=f"凸消化{EMOJI_YET_ATK}→{EMOJI_CMP_ATK}", custom_id="attack_complete"
+    )
+    @btn_log.log("push attack complete button")
+    async def AttackCompleteButton(self, button, interaction: discord.Interaction):
+        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+            return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
-        if interaction.user.display_name not in reporters:
-            reporters.append(interaction.user.display_name)
-        embed = discord.Embed(title="凸完了報告")
-        embed.add_field(name="3凸完了", value="\n".join(reporters))
-        if yet_report_field is not None:
-            if interaction.user.display_name in yet_reporters:
-                yet_reporters.remove(interaction.user.display_name)
-            embed.add_field(name="3凸未完", value="\n".join(yet_reporters))
-        embed.add_field(name="凸完人数", value=str(len(reporters) - 1))
+        embed = interaction.message.embeds[0].copy()
+        reports_field = embed.fields[0]
+        repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_YET_ATK, EMOJI_CMP_ATK, 1)
+        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+
+        is_target, repl_reports, repo_summary = change_reports(
+            guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
+        )
+        if is_target is None:
+            return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
+        reports_field.value = repl_reports
+        reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
 
-    @discord.ui.button(style=discord.ButtonStyle.danger, label="キャンセル", custom_id="attack_finished_cancel")
-    @btn_log.log("push attack finished cancel button")
-    async def AttackFinishedCancelButton(self, button, interaction: discord.Interaction):
-        report_field = next(filter(lambda f: f.name == "3凸完了", interaction.message.embeds[0].fields), None)
-        if report_field is None:
-            return await interaction.response.send_message("error", ephemeral=True)
-        yet_report_field = next(filter(lambda f: f.name == "3凸未完", interaction.message.embeds[0].fields), None)
-        reporters = report_field.value.splitlines()
-        if yet_report_field is not None:
-            yet_reporters = yet_report_field.value.splitlines()
-            if interaction.user.display_name not in (reporters + yet_reporters):
-                return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+    @discord.ui.button(
+        style=discord.ButtonStyle.gray, label=f"凸持越{EMOJI_YET_ATK}→{EMOJI_CARRY}", custom_id="attack_carry"
+    )
+    @btn_log.log("push attack carry button")
+    async def AttackCarryButton(self, button, interaction: discord.Interaction):
+        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+            return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
-        if interaction.user.display_name in reporters:
-            reporters.remove(interaction.user.display_name)
-        embed = discord.Embed(title="凸完了報告")
-        embed.add_field(name="3凸完了", value="\n".join(reporters))
-        if yet_report_field is not None:
-            if interaction.user.display_name not in yet_reporters:
-                yet_reporters.append(interaction.user.display_name)
-            embed.add_field(name="3凸未完", value="\n".join(yet_reporters))
-        embed.add_field(name="凸完人数", value=str(len(reporters) - 1))
+        embed = interaction.message.embeds[0].copy()
+        reports_field = embed.fields[0]
+        repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_YET_ATK, EMOJI_CARRY, 1)
+        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+
+        is_target, repl_reports, repo_summary = change_reports(
+            guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
+        )
+        if is_target is None:
+            return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
+        reports_field.value = repl_reports
+        reports_field.name = repo_summary
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(
+        style=discord.ButtonStyle.gray, label=f"持越消化{EMOJI_CARRY}→{EMOJI_CMP_ATK}", custom_id="carry_complete"
+    )
+    @btn_log.log("push carry complete button")
+    async def CarryCompleteButton(self, button, interaction: discord.Interaction):
+        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+            return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
+
+        embed = interaction.message.embeds[0].copy()
+        reports_field = embed.fields[0]
+        repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_CARRY, EMOJI_CMP_ATK, 1)
+        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+
+        is_target, repl_reports, repo_summary = change_reports(
+            guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
+        )
+        if is_target is None:
+            return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
+        reports_field.value = repl_reports
+        reports_field.name = repo_summary
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(style=discord.ButtonStyle.gray, label="全凸消化", custom_id="all_complete")
+    @btn_log.log("push all complete button")
+    async def AllCompleteButton(self, button, interaction: discord.Interaction):
+        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+            return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
+
+        embed = interaction.message.embeds[0].copy()
+        reports_field = embed.fields[0]
+        repl_func: Callable[[str], str] = lambda r: EMOJI_CMP_ATK * 3
+        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+
+        is_target, repl_reports, repo_summary = change_reports(
+            guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
+        )
+        if is_target is None:
+            return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
+        reports_field.value = repl_reports
+        reports_field.name = repo_summary
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(style=discord.ButtonStyle.blurple, label="メモ", custom_id="report_memo", row=2)
+    @btn_log.log("push report memo button")
+    async def ReportMemoButton(self, button, interaction: discord.Interaction):
+        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+        target_repo = mongo.AttackReport.Get(interaction.guild.id, create_date, interaction.user.id)
+
+        if target_repo is None:
+            return await interaction.response.send_message("対象ユーザーではありません。")
+
+        modal = MemoModal(repo=target_repo, embed=interaction.message.embeds[0].copy())
+        await interaction.response.send_modal(modal=modal)
+
+    @discord.ui.button(style=discord.ButtonStyle.danger, label="リセット", custom_id="reset_report", row=2)
+    @btn_log.log("push reset report button")
+    async def ResetReportButton(self, button, interaction: discord.Interaction):
+        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+            return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
+
+        embed = interaction.message.embeds[0].copy()
+        reports_field = embed.fields[0]
+        repl_func: Callable[[str], str] = lambda r: EMOJI_YET_ATK * 3
+        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+
+        is_target, repl_reports, repo_summary = change_reports(
+            guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
+        )
+        if is_target is None:
+            return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
+
+        reports_field.value = repl_reports
+        reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
 
 
@@ -78,6 +184,43 @@ class AttarckReportCog(commands.Cog):
 
     def cog_unload(self):
         self.scheduled_create_report.cancel()
+
+    async def create_report_embed(self, guild: discord.Guild) -> discord.Embed:
+        embed = discord.Embed(title="凸完了報告")
+        clan_role = mongo.ClanMemberRole.Get(guild_id=guild.id)
+        if clan_role is not None:
+            all_members = await guild.fetch_members().flatten()
+            role_user_ids = [m.id for m in all_members if clan_role.role_id in [r.id for r in m.roles]]
+            now_date = datetime.now(timezone(timedelta(hours=9))).date()
+            reports = mongo.AttackReport.Gets(guild_id=guild.id, target_date=now_date)
+            reg_user_ids = [r.user_id for r in reports]
+            yet_reg_user_ids = set(role_user_ids) - set(reg_user_ids)
+            del_reg_user_ids = set(reg_user_ids) - set(role_user_ids)
+            del_reports = [r for r in reports if r.user_id in del_reg_user_ids]
+            keep_reports = [r for r in reports if r.user_id not in del_reg_user_ids]
+            for dr in del_reports:
+                dr.Delete()
+            init_repo = EMOJI_YET_ATK * 3
+            yet_reports = [mongo.AttackReport(guild.id, now_date, id, init_repo, "") for id in yet_reg_user_ids]
+            if yet_reports:
+                mongo.AttackReport.Sets(yet_reports)
+            update_reports = keep_reports + yet_reports
+            repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in update_reports]
+            repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
+
+            yet_atk_count = sum([r.report.count("🍖", 0, 3) for r in update_reports])
+            yet_cmp_count = sum([r.report.count("🦴", 0, 3) for r in update_reports])
+            carry_count = sum([r.report.count("🍰", 0, 3) for r in update_reports])
+            repo_summary = (
+                f"凸状況 (残凸`{EMOJI_YET_ATK}`= **{yet_atk_count}** , "
+                f"持越`{EMOJI_CARRY}`= **{carry_count}** , "
+                f"消化`{EMOJI_CMP_ATK}`= **{yet_cmp_count}** )"
+            )
+            embed.add_field(
+                name=repo_summary,
+                value=repl_reports,
+            )
+        return embed
 
     @tasks.loop(time=time(hour=20, minute=0))
     async def scheduled_create_report(self):
@@ -93,23 +236,14 @@ class AttarckReportCog(commands.Cog):
             for reg in reglist:
                 if reg.last_published < now_date:
                     try:
+                        navigator = AttarckReportView()
                         guild = self.bot.get_guild(reg.guild_id)
                         if guild is None:
                             guild = await self.bot.fetch_guild(reg.guild_id)
                         channel = guild.get_channel(reg.channel_id)
                         if channel is None:
                             channel = await guild.fetch_channel(reg.channel_id)
-                        navigator = AttarckReportView()
-                        embed = discord.Embed(title="凸完了報告")
-                        embed.add_field(name="3凸完了", value="-----")
-                        clan_role = mongo.ClanMemberRole.Get(guild_id=reg.guild_id)
-                        if clan_role is not None:
-                            all_members = await guild.fetch_members().flatten()
-                            member_names = [
-                                m.display_name for m in all_members if clan_role.role_id in [r.id for r in m.roles]
-                            ]
-                            embed.add_field(name="3凸未完", value="\n".join(["-----"] + member_names))
-                        embed.add_field(name="凸完人数", value="0")
+                        embed = await self.create_report_embed(guild=guild)
                         await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
 
                     except discord.NotFound:
@@ -180,14 +314,7 @@ class AttarckReportCog(commands.Cog):
     @cmd_log.info("call attack report make command")
     async def AttackReportCommand(self, ctx: discord.ApplicationContext):
         navigator = AttarckReportView()
-        embed = discord.Embed(title="凸完了報告")
-        embed.add_field(name="3凸完了", value="-----")
-        clan_role = mongo.ClanMemberRole.Get(guild_id=ctx.guild_id)
-        if clan_role is not None:
-            all_members = await ctx.guild.fetch_members().flatten()
-            member_names = [m.display_name for m in all_members if clan_role.role_id in [r.id for r in m.roles]]
-            embed.add_field(name="3凸未完", value="\n".join(["-----"] + member_names))
-        embed.add_field(name="凸完人数", value="0")
+        embed = await self.create_report_embed(ctx.guild)
         await ctx.respond(embed=embed, view=navigator)
 
     @AttackReportCommand.error
@@ -200,3 +327,35 @@ def setup(bot: BotClass):
     logger.info("Load bot cog from %s", __name__)
     bot.add_cog(AttarckReportCog(bot))
     bot.persistent_view_classes.add(AttarckReportView)
+
+
+def change_reports(
+    guild: discord.Guild, target_date: date, user_id: int, repl_func: Callable[[str], str]
+) -> tuple[bool, str, str]:
+    reports = mongo.AttackReport.Gets(guild.id, target_date)
+    target_repo = next(filter(lambda r: r[1].user_id == user_id, enumerate(reports)), None)
+    if target_repo is None:
+        return False, "", ""
+
+    repl_repo = repl_func(target_repo[1].report)
+    target_repo[1].report = repl_repo
+    target_repo[1].Set()
+    reports[target_repo[0]] = target_repo[1]
+    reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
+
+    member = guild.get_member(user_id)
+    if member is None:
+        _ = guild.fetch_members()
+    repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports]
+    repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
+
+    yet_atk_count = sum([r.report.count("🍖", 0, 3) for r in reports])
+    yet_cmp_count = sum([r.report.count("🦴", 0, 3) for r in reports])
+    carry_count = sum([r.report.count("🍰", 0, 3) for r in reports])
+    repo_summary = (
+        f"凸状況 (残凸`{EMOJI_YET_ATK}`= **{yet_atk_count}** , "
+        f"持越`{EMOJI_CARRY}`= **{carry_count}** , "
+        f"消化`{EMOJI_CMP_ATK}`= **{yet_cmp_count}** )"
+    )
+
+    return True, repl_reports, repo_summary
