@@ -37,7 +37,9 @@ class MemoModal(Modal):
         self.repo.memo = "" if self.children[0].value is None else self.children[0].value
         self.repo.Set()
         reports = mongo.AttackReport.Gets(self.repo.guild_id, self.repo.target_date)
-        reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
+        reports = sorted(
+            reports, key=lambda r: (r.report.count(EMOJI_YET_ATK), r.report.count(EMOJI_CARRY)), reverse=True
+        )
         member = interaction.guild.get_member(self.repo.user_id)
         if member is None:
             _ = interaction.guild.fetch_members()
@@ -208,13 +210,13 @@ class AttarckReportCog(commands.Cog):
             repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in update_reports]
             repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 
-            yet_atk_count = sum([r.report.count("🍖", 0, 3) for r in update_reports])
-            yet_cmp_count = sum([r.report.count("🦴", 0, 3) for r in update_reports])
-            carry_count = sum([r.report.count("🍰", 0, 3) for r in update_reports])
+            yet_atk_count = sum([r.report.count(EMOJI_YET_ATK, 0, 3) for r in update_reports])
+            cmp_atk_count = sum([r.report.count(EMOJI_CMP_ATK, 0, 3) for r in update_reports])
+            carry_count = sum([r.report.count(EMOJI_CARRY, 0, 3) for r in update_reports])
             repo_summary = (
                 f"凸状況 (残凸`{EMOJI_YET_ATK}`= **{yet_atk_count}** , "
                 f"持越`{EMOJI_CARRY}`= **{carry_count}** , "
-                f"消化`{EMOJI_CMP_ATK}`= **{yet_cmp_count}** )"
+                f"消化`{EMOJI_CMP_ATK}`= **{cmp_atk_count}** )"
             )
             embed.add_field(
                 name=repo_summary,
@@ -341,7 +343,7 @@ def change_reports(
     target_repo[1].report = repl_repo
     target_repo[1].Set()
     reports[target_repo[0]] = target_repo[1]
-    reports = sorted(reports, key=lambda r: (r.report.count("🍖"), r.report.count("🍰")), reverse=True)
+    reports = sorted(reports, key=lambda r: (r.report.count(EMOJI_YET_ATK), r.report.count(EMOJI_CARRY)), reverse=True)
 
     member = guild.get_member(user_id)
     if member is None:
@@ -349,13 +351,13 @@ def change_reports(
     repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports]
     repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 
-    yet_atk_count = sum([r.report.count("🍖", 0, 3) for r in reports])
-    yet_cmp_count = sum([r.report.count("🦴", 0, 3) for r in reports])
-    carry_count = sum([r.report.count("🍰", 0, 3) for r in reports])
+    yet_atk_count = sum([r.report.count(EMOJI_YET_ATK, 0, 3) for r in reports])
+    cmp_atk_count = sum([r.report.count(EMOJI_CMP_ATK, 0, 3) for r in reports])
+    carry_count = sum([r.report.count(EMOJI_CARRY, 0, 3) for r in reports])
     repo_summary = (
         f"凸状況 (残凸`{EMOJI_YET_ATK}`= **{yet_atk_count}** , "
         f"持越`{EMOJI_CARRY}`= **{carry_count}** , "
-        f"消化`{EMOJI_CMP_ATK}`= **{yet_cmp_count}** )"
+        f"消化`{EMOJI_CMP_ATK}`= **{cmp_atk_count}** )"
     )
 
     return True, repl_reports, repo_summary
