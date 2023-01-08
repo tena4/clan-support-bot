@@ -77,6 +77,7 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
+        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
     @discord.ui.button(
         style=discord.ButtonStyle.gray, label=f"凸持越{EMOJI_YET_ATK}→{EMOJI_CARRY}", custom_id="attack_carry"
@@ -123,6 +124,7 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
+        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="全凸消化", custom_id="all_complete")
     @btn_log.log("push all complete button")
@@ -144,6 +146,7 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
+        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, label="メモ", custom_id="report_memo", row=2)
     @btn_log.log("push report memo button")
@@ -177,6 +180,7 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
+        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
 
 class AttarckReportCog(commands.Cog):
@@ -247,6 +251,7 @@ class AttarckReportCog(commands.Cog):
                             channel = await guild.fetch_channel(reg.channel_id)
                         embed = await self.create_report_embed(guild=guild)
                         await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
+                        await update_yet_complete_role(guild, now_date)
 
                     except discord.NotFound:
                         err_reglist.append(reg)
@@ -315,9 +320,11 @@ class AttarckReportCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="atk_report_make", description="凸完了報告表を作成")
     @cmd_log.info("call attack report make command")
     async def AttackReportCommand(self, ctx: discord.ApplicationContext):
+        now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
         navigator = AttarckReportView()
         embed = await self.create_report_embed(ctx.guild)
         await ctx.respond(embed=embed, view=navigator)
+        await update_yet_complete_role(ctx.guild, now_date)
 
     @AttackReportCommand.error
     @cmd_log.error("attack report make command error")
@@ -361,3 +368,29 @@ def change_reports(
     )
 
     return True, repl_reports, repo_summary
+
+
+async def update_yet_complete_role(guild: discord.Guild, target_date: date):
+    mongo_role = mongo.YetCompleteRole.Get(guild.id)
+    if mongo_role is None:
+        return
+    yet_cmp_role = guild.get_role(mongo_role.role_id)
+    if yet_cmp_role is None:
+        roles = await guild.fetch_roles()
+        yet_cmp_role = next(filter(lambda r: r.id == mongo_role.role_id, roles), None)
+        if yet_cmp_role is None:
+            return
+    role_user_ids = set([m.id for m in yet_cmp_role.members])
+
+    reports = mongo.AttackReport.Gets(guild.id, target_date)
+    repo_yet_user_ids = set([r.user_id for r in reports if r.report != EMOJI_CMP_ATK * 3])
+
+    remove_role_user_ids = role_user_ids - repo_yet_user_ids
+    for uid in remove_role_user_ids:
+        mem = guild.get_member(uid)
+        await mem.remove_roles(yet_cmp_role)
+
+    add_role_user_ids = repo_yet_user_ids - role_user_ids
+    for uid in add_role_user_ids:
+        mem = guild.get_member(uid)
+        await mem.add_roles(yet_cmp_role)
