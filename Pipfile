@@ -9,6 +9,7 @@ google-api-python-client = "*"
 py-cord = "==2.3.2"
 python-json-logger = "*"
 pymongo = {extras = ["srv"], version = "*"}
+google-cloud-logging = "*"
 
 [dev-packages]
 black = "*"

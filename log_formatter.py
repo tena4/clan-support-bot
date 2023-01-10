@@ -1,4 +1,5 @@
 from datetime import datetime
+from logging import Filter
 
 from pythonjsonlogger import jsonlogger
 
@@ -14,3 +15,9 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
             log_record["level"] = log_record["level"].upper()
         else:
             log_record["level"] = record.levelname
+
+
+class NotPyNaClFilter(Filter):
+    def filter(self, record):
+        log_message = record.getMessage()
+        return "PyNaCl is not installed, voice will NOT be supported" != log_message
