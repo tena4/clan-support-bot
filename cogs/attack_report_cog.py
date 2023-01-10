@@ -260,7 +260,10 @@ class AttarckReportCog(commands.Cog):
                             "HTTP exception by create attack report",
                             exc_info=True,
                             extra={
-                                "channel_id": reg.channel_id,
+                                "json_fields": {
+                                    "guild_id": reg.guild_id,
+                                    "channel_id": reg.channel_id,
+                                }
                             },
                         )
                     except Exception:
@@ -268,7 +271,10 @@ class AttarckReportCog(commands.Cog):
                             "unknown exception by create attack report",
                             exc_info=True,
                             extra={
-                                "channel_id": reg.channel_id,
+                                "json_fields": {
+                                    "guild_id": reg.guild_id,
+                                    "channel_id": reg.channel_id,
+                                }
                             },
                         )
                     else:
@@ -280,7 +286,10 @@ class AttarckReportCog(commands.Cog):
                 logger.info(
                     "remove attack report register",
                     extra={
-                        "channel_id": err_reg.channel_id,
+                        "json_fields": {
+                            "guild_id": err_reg.guild_id,
+                            "channel_id": err_reg.channel_id,
+                        }
                     },
                 )
                 err_reg.Delete()

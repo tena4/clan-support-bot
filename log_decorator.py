@@ -19,7 +19,7 @@ class CommandLogDecorator:
                         "channel_id": ctx.channel_id,
                         "user_id": ctx.user.id if ctx.user else None,
                     }
-                    self.logger.info(message, extra=extra)
+                    self.logger.info(message, extra={"json_fields": extra})
 
                 else:
                     self.logger.error(f"wrong number of arguments with {message}")
@@ -43,7 +43,7 @@ class CommandLogDecorator:
                         "user_id": ctx.user.id if ctx.user else None,
                         "error": err,
                     }
-                    self.logger.error(message, extra=extra)
+                    self.logger.error(message, extra={"json_fields": extra})
 
                 else:
                     self.logger.error(f"wrong number of arguments with {message}")
@@ -71,7 +71,7 @@ class ButtonLogDecorator:
                         "message_id": interaction.message.id if interaction.message else None,
                         "user_id": interaction.user.id if interaction.user else None,
                     }
-                    self.logger.info(message, extra=extra)
+                    self.logger.info(message, extra={"json_fields": extra})
 
                 else:
                     self.logger.error(f"wrong number of arguments with {message}")
@@ -99,7 +99,7 @@ class CallbackLogDecorator:
                         "message_id": interaction.message.id if interaction.message else None,
                         "user_id": interaction.user.id if interaction.user else None,
                     }
-                    self.logger.info(message, extra=extra)
+                    self.logger.info(message, extra={"json_fields": extra})
 
                 else:
                     self.logger.error(f"wrong number of arguments with {message}")
