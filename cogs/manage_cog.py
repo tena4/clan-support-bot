@@ -16,7 +16,7 @@ cmd_log = CommandLogDecorator(logger=logger)
 
 class ManageCog(commands.Cog):
     message_id_desc = "メッセージのID"
-    role_desc = "ロールのID"
+    role_desc = "ロール"
     status_desc = "ステータスメッセージ"
 
     def __init__(self, bot: BotClass):
@@ -71,11 +71,8 @@ class ManageCog(commands.Cog):
     async def SetClanMemberRoleCommand(
         self,
         ctx: discord.ApplicationContext,
-        role_id: Option(str, role_desc),
+        role: Option(discord.Role, role_desc),
     ):
-        role = ctx.guild.get_role(int(role_id))
-        if role is None:
-            return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
         mongo.ClanMemberRole(guild_id=ctx.guild_id, role_id=role.id).Set()
         return await ctx.respond(f"クランメンバーのロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True)
 
@@ -125,11 +122,8 @@ class ManageCog(commands.Cog):
     async def SetYetCompleteRoleCommand(
         self,
         ctx: discord.ApplicationContext,
-        role_id: Option(str, role_desc),
+        role: Option(discord.Role, role_desc),
     ):
-        role = ctx.guild.get_role(int(role_id))
-        if role is None:
-            return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
         mongo.YetCompleteRole(guild_id=ctx.guild_id, role_id=role.id).Set()
         return await ctx.respond(f"未完了凸のロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True)
 
