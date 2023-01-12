@@ -21,16 +21,11 @@ class Config(Singleton):
         self.youtube_api_keys: list[str] = json.loads(os.environ.get("YOUTUBE_API_KEYS", "[]"))
         self.log_level: str = os.environ.get("LOG_LEVEL", "INFO")
         self.database_url: str = os.environ.get("DATABASE_URL")
+        self.gcp_project_id: str = os.environ["GCP_PROJECT_ID"]
+        self.gcp_private_key_id: str = os.environ["GCP_PRIVATE_KEY_ID"]
+        self.gcp_private_key: str = os.environ["GCP_PRIVATE_KEY"]
+        self.gcp_client_mail: str = os.environ["GCP_CLIENT_MAIL"]
+        self.gcp_client_id: str = os.environ["GCP_CLIENT_ID"]
+        self.gcp_client_x509_cert_url: str = os.environ["GCP_CLIENT_X509_CERT_URL"]
         if len(self.guild_ids) == 0:
             self.guild_ids = None
-
-    def __str__(self) -> str:
-        return (
-            "Config: {"
-            f"bot_token: {self.bot_token}, "
-            f"guild_ids: {self.guild_ids}, "
-            f"youtube_api_keys: {self.youtube_api_keys}, "
-            f"log_level: {self.log_level}"
-            f"database_url: {self.database_url}"
-            "}"
-        )

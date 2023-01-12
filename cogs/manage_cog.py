@@ -16,7 +16,7 @@ cmd_log = CommandLogDecorator(logger=logger)
 
 class ManageCog(commands.Cog):
     message_id_desc = "メッセージのID"
-    role_desc = "ロールのID"
+    role_desc = "ロール"
     status_desc = "ステータスメッセージ"
 
     def __init__(self, bot: BotClass):
@@ -71,11 +71,9 @@ class ManageCog(commands.Cog):
     async def SetClanMemberRoleCommand(
         self,
         ctx: discord.ApplicationContext,
-        role_id: Option(str, role_desc),
+        role: Option(discord.Role, role_desc),
     ):
-        role = ctx.guild.get_role(int(role_id))
-        if role is None:
-            return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
+        role: discord.Role = role
         mongo.ClanMemberRole(guild_id=ctx.guild_id, role_id=role.id).Set()
         return await ctx.respond(f"クランメンバーのロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True)
 
@@ -125,11 +123,9 @@ class ManageCog(commands.Cog):
     async def SetYetCompleteRoleCommand(
         self,
         ctx: discord.ApplicationContext,
-        role_id: Option(str, role_desc),
+        role: Option(discord.Role, role_desc),
     ):
-        role = ctx.guild.get_role(int(role_id))
-        if role is None:
-            return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
+        role: discord.Role = role
         mongo.YetCompleteRole(guild_id=ctx.guild_id, role_id=role.id).Set()
         return await ctx.respond(f"未完了凸のロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True)
 
@@ -172,6 +168,22 @@ class ManageCog(commands.Cog):
     @RemoveYetCompleteRoleCommand.error
     @cmd_log.error("remove yet complete role command error")
     async def RemoveYetCompleteRoleCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)
+
+    @slash_command(guild_ids=config.guild_ids, name="get_role_members", description="対象ロールのメンバーを表示する")
+    @cmd_log.info("call get role members command")
+    async def GetRoleMembersCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        role: Option(discord.Role, role_desc),
+    ):
+        role: discord.Role = role
+        members_str = "\n".join([m.display_name for m in role.members])
+        return await ctx.respond(f"ロール(ID:{role.id}, Name:{role.name})のメンバー一覧\n{members_str}", ephemeral=True)
+
+    @GetRoleMembersCommand.error
+    @cmd_log.error("get role members command error")
+    async def GetRoleMembersCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
     @slash_command(guild_ids=config.guild_ids, name="set_status", description="[admin]botのステータスメッセージを設定する")

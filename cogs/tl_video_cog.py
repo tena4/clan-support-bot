@@ -5,14 +5,15 @@ from http.client import HTTPException
 from logging import ERROR, getLogger
 from typing import Optional
 
-import app_config
-import char
 import discord
-import mongo_data as mongo
 from discord.commands import Option, slash_command
 from discord.ext import commands, tasks
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
+import app_config
+import char
+import mongo_data as mongo
 from log_decorator import CommandLogDecorator
 from mybot import BotClass
 
@@ -54,19 +55,25 @@ class TLVideoCog(commands.Cog):
         try:
             logger.info(
                 "get videos by youtube search",
-                extra={"query": query, "published_before": search_pub_before, "published_after": search_pub_after},
+                extra={
+                    "json_fields": {
+                        "query": query,
+                        "published_before": search_pub_before,
+                        "published_after": search_pub_after,
+                    }
+                },
             )
             search_videos = youtube_search(
                 query=query, published_after=search_pub_after, published_before=search_pub_before, api_key=api_key
             )
             logger.info(
                 "got videos by youtube search",
-                extra={"videos_count": len(search_videos)},
+                extra={"json_fields": {"videos_count": len(search_videos)}},
             )
         except HttpError as e:
             logger.warn(
                 "http error by youtube search",
-                extra={"status": e.resp.status, "content": e.content},
+                extra={"json_fields": {"status": e.resp.status, "content": e.content}},
             )
             return
         except Exception:
@@ -144,10 +151,12 @@ class TLVideoCog(commands.Cog):
                     logger.info(
                         "edit subscribe message for tl videos",
                         extra={
-                            "boss_number": boss.number,
-                            "guild_id": msg.guild_id,
-                            "channel_id": msg.channel_id,
-                            "message_id": msg.message_id,
+                            "json_fields": {
+                                "boss_number": boss.number,
+                                "guild_id": msg.guild_id,
+                                "channel_id": msg.channel_id,
+                                "message_id": msg.message_id,
+                            },
                         },
                     )
                     try:
@@ -167,10 +176,12 @@ class TLVideoCog(commands.Cog):
                             "HTTP exception by edit subscribe message",
                             exc_info=True,
                             extra={
-                                "boss_number": boss.number,
-                                "guild_id": msg.guild_id,
-                                "channel_id": msg.channel_id,
-                                "message_id": msg.message_id,
+                                "json_fields": {
+                                    "boss_number": boss.number,
+                                    "guild_id": msg.guild_id,
+                                    "channel_id": msg.channel_id,
+                                    "message_id": msg.message_id,
+                                },
                             },
                         )
                     except Exception:
@@ -178,10 +189,12 @@ class TLVideoCog(commands.Cog):
                             "unknown exceptions by edit subscribe message",
                             exc_info=True,
                             extra={
-                                "boss_number": boss.number,
-                                "guild_id": msg.guild_id,
-                                "channel_id": msg.channel_id,
-                                "message_id": msg.message_id,
+                                "json_fields": {
+                                    "boss_number": boss.number,
+                                    "guild_id": msg.guild_id,
+                                    "channel_id": msg.channel_id,
+                                    "message_id": msg.message_id,
+                                },
                             },
                         )
 
@@ -190,20 +203,24 @@ class TLVideoCog(commands.Cog):
                     logger.info(
                         "remove subscribe message",
                         extra={
-                            "boss_number": boss.number,
-                            "guild_id": em.guild_id,
-                            "channel_id": em.channel_id,
-                            "message_id": em.message_id,
+                            "json_fields": {
+                                "boss_number": boss.number,
+                                "guild_id": em.guild_id,
+                                "channel_id": em.channel_id,
+                                "message_id": em.message_id,
+                            },
                         },
                     )
                     if em.Delete() is False:
                         logger.warn(
                             "failed to remove subscribe message",
                             extra={
-                                "boss_number": boss.number,
-                                "guild_id": em.guild_id,
-                                "channel_id": em.channel_id,
-                                "message_id": em.message_id,
+                                "json_fields": {
+                                    "boss_number": boss.number,
+                                    "guild_id": em.guild_id,
+                                    "channel_id": em.channel_id,
+                                    "message_id": em.message_id,
+                                },
                             },
                         )
 
@@ -222,9 +239,11 @@ class TLVideoCog(commands.Cog):
                 logger.info(
                     "notify new tl videos",
                     extra={
-                        "boss_number": boss.number,
-                        "guild_id": notify.guild_id,
-                        "channel_id": notify.channel_id,
+                        "json_fields": {
+                            "boss_number": boss.number,
+                            "guild_id": notify.guild_id,
+                            "channel_id": notify.channel_id,
+                        },
                     },
                 )
                 try:
@@ -242,9 +261,11 @@ class TLVideoCog(commands.Cog):
                         "HTTP exception by notify new tl video",
                         exc_info=True,
                         extra={
-                            "boss_number": boss.number,
-                            "guild_id": notify.guild_id,
-                            "channel_id": notify.channel_id,
+                            "json_fields": {
+                                "boss_number": boss.number,
+                                "guild_id": notify.guild_id,
+                                "channel_id": notify.channel_id,
+                            },
                         },
                     )
                 except Exception:
@@ -252,9 +273,11 @@ class TLVideoCog(commands.Cog):
                         "unknown exceptions by notify new tl video",
                         exc_info=True,
                         extra={
-                            "boss_number": boss.number,
-                            "guild_id": notify.guild_id,
-                            "channel_id": notify.channel_id,
+                            "json_fields": {
+                                "boss_number": boss.number,
+                                "guild_id": notify.guild_id,
+                                "channel_id": notify.channel_id,
+                            },
                         },
                     )
 
@@ -263,9 +286,11 @@ class TLVideoCog(commands.Cog):
                 logger.info(
                     "remove tl video notify",
                     extra={
-                        "boss_number": boss.number,
-                        "guild_id": err_notify.guild_id,
-                        "channel_id": err_notify.channel_id,
+                        "json_fields": {
+                            "boss_number": boss.number,
+                            "guild_id": err_notify.guild_id,
+                            "channel_id": err_notify.channel_id,
+                        },
                     },
                 )
                 err_notify.Delete()
@@ -282,8 +307,10 @@ class TLVideoCog(commands.Cog):
             logger.warn(
                 "Misconfiguration of YOUTUBE_API_KEY environment variable",
                 extra={
-                    "channel_id": ctx.channel_id,
-                    "user_id": ctx.user.id if ctx.user else None,
+                    "json_fields": {
+                        "channel_id": ctx.channel_id,
+                        "user_id": ctx.user.id if ctx.user else None,
+                    },
                 },
             )
             await ctx.respond("環境変数の設定が正しくされていません。(YOUTUBE_API_KEY)", ephemeral=True)
@@ -294,8 +321,10 @@ class TLVideoCog(commands.Cog):
             logger.warn(
                 "Misconfiguration of boss info resiger",
                 extra={
-                    "channel_id": ctx.channel_id,
-                    "user_id": ctx.user.id if ctx.user else None,
+                    "json_fields": {
+                        "channel_id": ctx.channel_id,
+                        "user_id": ctx.user.id if ctx.user else None,
+                    },
                 },
             )
             await ctx.respond(f"{boss_num}ボスの情報が登録されていません。", ephemeral=True)
