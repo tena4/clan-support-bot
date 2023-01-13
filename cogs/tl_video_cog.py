@@ -58,8 +58,8 @@ class TLVideoCog(commands.Cog):
                 extra={
                     "json_fields": {
                         "query": query,
-                        "published_before": search_pub_before,
-                        "published_after": search_pub_after,
+                        "published_before": search_pub_before.isoformat(),
+                        "published_after": search_pub_after.isoformat(),
                     }
                 },
             )
@@ -110,17 +110,17 @@ class TLVideoCog(commands.Cog):
             try:
                 logger.info(
                     "get youtube video",
-                    extra={"video_ids_count": len(target_vids), "boss_number": boss.number},
+                    extra={"json_fields": {"video_ids_count": len(target_vids), "boss_number": boss.number}},
                 )
                 target_videos_src = get_youtube_videos(target_vids, api_key)
                 logger.info(
                     "got youtube video",
-                    extra={"video_ids_count": len(target_videos_src), "boss_number": boss.number},
+                    extra={"json_fields": {"video_ids_count": len(target_videos_src), "boss_number": boss.number}},
                 )
             except HttpError as e:
                 logger.warn(
                     "http error by get youtube video",
-                    extra={"status": e.resp.status, "content": e.content},
+                    extra={"json_fields": {"status": e.resp.status, "content": e.content}},
                 )
                 continue
             except Exception:
