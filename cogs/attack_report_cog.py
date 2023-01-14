@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime, time, timedelta, timezone
 from http.client import HTTPException
 from logging import getLogger
@@ -54,6 +55,7 @@ class AttarckReportView(discord.ui.View):
     def __init__(self):
         # making None is important if you want the button work after restart!
         super().__init__(timeout=None)
+        self.lock = asyncio.Lock()
 
     @discord.ui.button(
         style=discord.ButtonStyle.gray, label=f"凸消化{EMOJI_YET_ATK}→{EMOJI_CMP_ATK}", custom_id="attack_complete"
@@ -77,7 +79,8 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
-        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
+        async with self.lock:
+            await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
     @discord.ui.button(
         style=discord.ButtonStyle.gray, label=f"凸持越{EMOJI_YET_ATK}→{EMOJI_CARRY}", custom_id="attack_carry"
@@ -124,7 +127,8 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
-        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
+        async with self.lock:
+            await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
     @discord.ui.button(style=discord.ButtonStyle.gray, label="全凸消化", custom_id="all_complete")
     @btn_log.log("push all complete button")
@@ -146,7 +150,8 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
-        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
+        async with self.lock:
+            await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, label="メモ", custom_id="report_memo", row=2)
     @btn_log.log("push report memo button")
@@ -180,7 +185,8 @@ class AttarckReportView(discord.ui.View):
         reports_field.value = repl_reports
         reports_field.name = repo_summary
         await interaction.response.edit_message(embed=embed)
-        await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
+        async with self.lock:
+            await update_yet_complete_role(guild=interaction.guild, target_date=create_date)
 
 
 class AttarckReportCog(commands.Cog):
@@ -191,14 +197,13 @@ class AttarckReportCog(commands.Cog):
     def cog_unload(self):
         self.scheduled_create_report.cancel()
 
-    async def create_report_embed(self, guild: discord.Guild) -> discord.Embed:
+    async def create_report_embed(self, guild: discord.Guild, target_date: date) -> discord.Embed:
         embed = discord.Embed(title="凸完了報告")
         clan_role = mongo.ClanMemberRole.Get(guild_id=guild.id)
         if clan_role is not None:
             all_members = await guild.fetch_members().flatten()
             role_user_ids = [m.id for m in all_members if clan_role.role_id in [r.id for r in m.roles]]
-            now_date = datetime.now(timezone(timedelta(hours=9))).date()
-            reports = mongo.AttackReport.Gets(guild_id=guild.id, target_date=now_date)
+            reports = mongo.AttackReport.Gets(guild_id=guild.id, target_date=target_date)
             reg_user_ids = [r.user_id for r in reports]
             yet_reg_user_ids = set(role_user_ids) - set(reg_user_ids)
             del_reg_user_ids = set(reg_user_ids) - set(role_user_ids)
@@ -207,7 +212,7 @@ class AttarckReportCog(commands.Cog):
             for dr in del_reports:
                 dr.Delete()
             init_repo = EMOJI_YET_ATK * 3
-            yet_reports = [mongo.AttackReport(guild.id, now_date, id, init_repo, "") for id in yet_reg_user_ids]
+            yet_reports = [mongo.AttackReport(guild.id, target_date, id, init_repo, "") for id in yet_reg_user_ids]
             if yet_reports:
                 mongo.AttackReport.Sets(yet_reports)
             update_reports = keep_reports + yet_reports
@@ -249,9 +254,9 @@ class AttarckReportCog(commands.Cog):
                         channel = guild.get_channel(reg.channel_id)
                         if channel is None:
                             channel = await guild.fetch_channel(reg.channel_id)
-                        embed = await self.create_report_embed(guild=guild)
-                        await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
+                        embed = await self.create_report_embed(guild=guild, target_date=now_date)
                         await update_yet_complete_role(guild, now_date)
+                        await channel.send(content=f"{day_index + 1}日目", embed=embed, view=navigator)
 
                     except discord.NotFound:
                         err_reglist.append(reg)
@@ -331,9 +336,10 @@ class AttarckReportCog(commands.Cog):
     async def AttackReportCommand(self, ctx: discord.ApplicationContext):
         now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
         navigator = AttarckReportView()
-        embed = await self.create_report_embed(ctx.guild)
-        await ctx.respond(embed=embed, view=navigator)
+        await ctx.defer()
+        embed = await self.create_report_embed(ctx.guild, now_date)
         await update_yet_complete_role(ctx.guild, now_date)
+        await ctx.respond(embed=embed, view=navigator)
 
     @AttackReportCommand.error
     @cmd_log.error("attack report make command error")
