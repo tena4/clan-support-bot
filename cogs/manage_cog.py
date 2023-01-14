@@ -180,7 +180,7 @@ class ManageCog(commands.Cog):
         if clan_role is None:
             return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
 
-        await ctx.defer()
+        await ctx.defer(ephemeral=True)
         roles = await ctx.guild.fetch_roles()
         yc_role = next(filter(lambda r: r.id == clan_role.role_id, roles), None)
         if yc_role is None:
@@ -189,7 +189,7 @@ class ManageCog(commands.Cog):
         cnt = len(yc_role.members)
         for m in yc_role.members:
             await m.remove_roles(yc_role)
-        return await ctx.send_followup(f"全ユーザ(対象:{cnt}名)の未完了凸のロール(ID:{clan_role.role_id})取り外し完了", ephemeral=True)
+        return await ctx.respond(f"全ユーザ(対象:{cnt}名)の未完了凸のロール(ID:{clan_role.role_id})取り外し完了", ephemeral=True)
 
     @DetachAllYetCompleteRoleCommand.error
     @cmd_log.error("detach all yet complete role command error")

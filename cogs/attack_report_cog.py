@@ -73,7 +73,7 @@ class AttarckReportView(discord.ui.View):
         is_target, repl_reports, repo_summary = change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
-        if is_target is None:
+        if not is_target:
             return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
 
         reports_field.value = repl_reports
@@ -98,7 +98,7 @@ class AttarckReportView(discord.ui.View):
         is_target, repl_reports, repo_summary = change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
-        if is_target is None:
+        if not is_target:
             return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
 
         reports_field.value = repl_reports
@@ -121,7 +121,7 @@ class AttarckReportView(discord.ui.View):
         is_target, repl_reports, repo_summary = change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
-        if is_target is None:
+        if not is_target:
             return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
 
         reports_field.value = repl_reports
@@ -144,7 +144,7 @@ class AttarckReportView(discord.ui.View):
         is_target, repl_reports, repo_summary = change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
-        if is_target is None:
+        if not is_target:
             return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
 
         reports_field.value = repl_reports
@@ -160,7 +160,7 @@ class AttarckReportView(discord.ui.View):
         target_repo = mongo.AttackReport.Get(interaction.guild.id, create_date, interaction.user.id)
 
         if target_repo is None:
-            return await interaction.response.send_message("対象ユーザーではありません。")
+            return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
 
         modal = MemoModal(repo=target_repo, embed=interaction.message.embeds[0].copy())
         await interaction.response.send_modal(modal=modal)
@@ -179,7 +179,7 @@ class AttarckReportView(discord.ui.View):
         is_target, repl_reports, repo_summary = change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
-        if is_target is None:
+        if not is_target:
             return await interaction.response.send_message("対象ユーザーではありません。", ephemeral=True)
 
         reports_field.value = repl_reports
