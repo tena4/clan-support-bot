@@ -67,7 +67,7 @@ class ManageCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(guild_ids=config.guild_ids, name="set_clan_member_role", description="クランメンバーのロールを登録する")
-    @cmd_log.info("call clan member set role command")
+    @cmd_log.info("call set clan member role command")
     async def SetClanMemberRoleCommand(
         self,
         ctx: discord.ApplicationContext,
@@ -153,7 +153,7 @@ class ManageCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)
 
     @slash_command(guild_ids=config.guild_ids, name="remove_yet_complete_role", description="未完了凸のロールを登録解除する")
-    @cmd_log.info("call yet complete remove role command")
+    @cmd_log.info("call remove yet complete role command")
     async def RemoveYetCompleteRoleCommand(
         self,
         ctx: discord.ApplicationContext,
@@ -168,6 +168,32 @@ class ManageCog(commands.Cog):
     @RemoveYetCompleteRoleCommand.error
     @cmd_log.error("remove yet complete role command error")
     async def RemoveYetCompleteRoleCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)
+
+    @slash_command(guild_ids=config.guild_ids, name="detach_all_yet_complete_role", description="未完了凸のロールを全ユーザから外す")
+    @cmd_log.info("call detach all yet complete role command")
+    async def DetachAllYetCompleteRoleCommand(
+        self,
+        ctx: discord.ApplicationContext,
+    ):
+        clan_role = mongo.YetCompleteRole.Get(guild_id=ctx.guild_id)
+        if clan_role is None:
+            return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
+
+        await ctx.defer()
+        roles = await ctx.guild.fetch_roles()
+        yc_role = next(filter(lambda r: r.id == clan_role.role_id, roles), None)
+        if yc_role is None:
+            return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
+
+        cnt = len(yc_role.members)
+        for m in yc_role.members:
+            await m.remove_roles(yc_role)
+        return await ctx.send_followup(f"全ユーザ(対象:{cnt}名)の未完了凸のロール(ID:{clan_role.role_id})取り外し完了", ephemeral=True)
+
+    @DetachAllYetCompleteRoleCommand.error
+    @cmd_log.error("detach all yet complete role command error")
+    async def DetachAllYetCompleteRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
     @slash_command(guild_ids=config.guild_ids, name="get_role_members", description="対象ロールのメンバーを表示する")
