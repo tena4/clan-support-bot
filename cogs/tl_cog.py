@@ -1,12 +1,13 @@
 import re
 from logging import getLogger
 
-import app_config
-import char
 import discord
 from discord.commands import slash_command
 from discord.ext import commands
 from discord.ui import InputText, Modal
+
+import app_config
+import char
 from log_decorator import ButtonLogDecorator, CallbackLogDecorator, CommandLogDecorator
 from mybot import BotClass
 
@@ -39,7 +40,7 @@ class TLConvertModal(Modal):
             )
         )
 
-    @cb_log.log("submit tl convert modal")
+    @cb_log.info("submit tl convert modal")
     async def callback(self, interaction: discord.Interaction):
         if self.children[1].value.isdecimal():
             tl = self.children[0].value
@@ -50,6 +51,10 @@ class TLConvertModal(Modal):
             )
         else:
             await interaction.response.send_message("開始秒数の入力エラー", ephemeral=True)
+
+    @cb_log.error("error tl convert modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
 
 
 class TLFormatModal(Modal):
@@ -65,11 +70,15 @@ class TLFormatModal(Modal):
             )
         )
 
-    @cb_log.log("submit tl format modal")
+    @cb_log.info("submit tl format modal")
     async def callback(self, interaction: discord.Interaction):
         tl = self.children[0].value
         fmt_tl = change_format(tl)
         await interaction.response.send_message(content=f"TLフォーマット変換結果\n```c\n{fmt_tl}```", ephemeral=True)
+
+    @cb_log.error("error tl format modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
 
 
 class TLLauncherView(discord.ui.View):

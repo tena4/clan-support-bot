@@ -46,7 +46,7 @@ class CancelUserSelect(Select):
         self.message_id = message.id
         self.replace_function = replace_method
 
-    @cb_log.log("submit a cancel user select")
+    @cb_log.info("submit a cancel user select")
     async def callback(self, interaction: discord.Interaction):
         refresh_message = await interaction.channel.fetch_message(self.message_id)
         repl_content = await self.replace_function(self.message_id, refresh_message.content, self.values)
@@ -54,6 +54,10 @@ class CancelUserSelect(Select):
         await interaction.response.send_message(
             content="下記ユーザーの凸をキャンセルしました。\n{}".format("\n".join(self.values)), ephemeral=True
         )
+
+    @cb_log.error("error a cancel user select")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
 
 
 class ProxyCancelView(View):
@@ -75,7 +79,7 @@ class DamageModal(Modal):
         target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {self.re_username} 目標\d+万 :", atk)][0]
         self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
 
-    @cb_log.log("submit a damage modal")
+    @cb_log.info("submit a damage modal")
     async def callback(self, interaction: discord.Interaction):
         refresh_message = await interaction.channel.fetch_message(self.message_id)
         damage = self.children[0].value
@@ -95,6 +99,10 @@ class DamageModal(Modal):
             channel = channel if channel is not None else await interaction.guild.fetch_channel(notify.channel_id)
             await channel.send(embed=embed)
 
+    @cb_log.error("error a damage modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
+
 
 class TargetDamageModal(Modal):
     def __init__(self, message: discord.Message, username: str, attack_kind: str, replace_method: Function) -> None:
@@ -107,7 +115,7 @@ class TargetDamageModal(Modal):
         self.add_item(InputText(label="ダメージ(万)", placeholder="1234"))
         self.add_item(InputText(label="メモ", required=False))
 
-    @cb_log.log("submit a target damage modal")
+    @cb_log.info("submit a target damage modal")
     async def callback(self, interaction: discord.Interaction):
         repl_content = await self.replace_function(
             self.message_id,
@@ -139,6 +147,10 @@ class TargetDamageModal(Modal):
         channel = channel if channel is not None else await interaction.guild.fetch_channel(notify_channel_id)
         await channel.send(embed=embed)
 
+    @cb_log.error("error a target damage modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
+
 
 class AttackStartModal(Modal):
     def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
@@ -164,7 +176,7 @@ class AttackStartModal(Modal):
         )
         self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
 
-    @cb_log.log("submit a attack start modal")
+    @cb_log.info("submit a attack start modal")
     async def callback(self, interaction: discord.Interaction):
         content = self.mentions
         embed = discord.Embed(title=self.title, description=self.children[0].value)
@@ -194,6 +206,10 @@ class AttackStartModal(Modal):
                 if event is not None:
                     await event.start()
 
+    @cb_log.error("error a attack start modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
+
 
 class UnfreezeModal(Modal):
     def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
@@ -219,7 +235,7 @@ class UnfreezeModal(Modal):
         )
         self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
 
-    @cb_log.log("submit a unfreeze modal")
+    @cb_log.info("submit a unfreeze modal")
     async def callback(self, interaction: discord.Interaction):
         content = self.mentions
         embed = discord.Embed(title=self.title, description=self.children[0].value)
@@ -242,6 +258,10 @@ class UnfreezeModal(Modal):
             already_event = next(filter(lambda se: se.name == event_title, guild.scheduled_events), None)
             if already_event is not None:
                 await already_event.delete()
+
+    @cb_log.error("error a unfreeze modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
 
 
 class ConcurrentAttackButtonView(View):
