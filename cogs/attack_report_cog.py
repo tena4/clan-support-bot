@@ -33,7 +33,7 @@ class MemoModal(Modal):
         self.embed = embed
         self.add_item(InputText(label="メモ", style=discord.InputTextStyle.singleline, required=False))
 
-    @cb_log.log("submit a memo modal")
+    @cb_log.info("submit a memo modal")
     async def callback(self, interaction: discord.Interaction):
         self.repo.memo = "" if self.children[0].value is None else self.children[0].value
         self.repo.Set()
@@ -49,6 +49,10 @@ class MemoModal(Modal):
         ]
         self.embed.fields[0].value = "```\n" + "\n".join(repo_list) + "\n```"
         await interaction.response.edit_message(embed=self.embed)
+
+    @cb_log.error("error a memo modal")
+    async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
+        return await super().on_error(error, interaction)
 
 
 class AttarckReportView(discord.ui.View):

@@ -87,7 +87,7 @@ class CallbackLogDecorator:
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
 
-    def log(self, message):
+    def info(self, message):
         def _log_decorator(func):
             @wraps(func)
             async def wrapper(*args, **kwargs):
@@ -100,6 +100,30 @@ class CallbackLogDecorator:
                         "user_id": interaction.user.id if interaction.user else None,
                     }
                     self.logger.info(message, extra={"json_fields": extra})
+
+                else:
+                    self.logger.error(f"wrong number of arguments with {message}")
+
+                return await func(*args, **kwargs)
+
+            return wrapper
+
+        return _log_decorator
+
+    def error(self, message):
+        def _log_decorator(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                if len(args) == 3:
+                    err: Exception = args[1]
+                    interaction: Interaction = args[2]
+                    extra = {
+                        "guild_id": interaction.guild_id,
+                        "channel_id": interaction.channel_id,
+                        "message_id": interaction.message.id if interaction.message else None,
+                        "user_id": interaction.user.id if interaction.user else None,
+                    }
+                    self.logger.error(message, extra={"json_fields": extra}, exc_info=err)
 
                 else:
                     self.logger.error(f"wrong number of arguments with {message}")
