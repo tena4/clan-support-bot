@@ -122,10 +122,10 @@ class TLVideoCog(commands.Cog):
                     "http error by get youtube video",
                     extra={"json_fields": {"status": e.resp.status, "content": e.content}},
                 )
-                continue
+                return
             except Exception:
                 logger.error("unknown exceptions by get youtube video", exc_info=True)
-                continue
+                return
 
             for is_carry_over in [False, True]:
                 await asyncio.sleep(10)
@@ -184,6 +184,7 @@ class TLVideoCog(commands.Cog):
                                 },
                             },
                         )
+                        return
                     except Exception:
                         logger.error(
                             "unknown exceptions by edit subscribe message",
@@ -197,6 +198,7 @@ class TLVideoCog(commands.Cog):
                                 },
                             },
                         )
+                        return
 
                 for em in err_msgs:
                     # 編集するメッセージがない(削除された)場合、subsc_msgsから当メッセージを外す
@@ -268,6 +270,7 @@ class TLVideoCog(commands.Cog):
                             },
                         },
                     )
+                    return
                 except Exception:
                     logger.error(
                         "unknown exceptions by notify new tl video",
@@ -280,6 +283,7 @@ class TLVideoCog(commands.Cog):
                             },
                         },
                     )
+                    return
 
             for err_notify in err_notify_list:
                 # チャンネルがない(削除された)場合、ti_video_notifyから当チャンネルを外す
