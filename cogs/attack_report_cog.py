@@ -74,7 +74,7 @@ class AttarckReportView(discord.ui.View):
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_YET_ATK, EMOJI_CMP_ATK, 1)
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -99,7 +99,7 @@ class AttarckReportView(discord.ui.View):
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_YET_ATK, EMOJI_CARRY, 1)
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -122,7 +122,7 @@ class AttarckReportView(discord.ui.View):
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_CARRY, EMOJI_CMP_ATK, 1)
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -145,7 +145,7 @@ class AttarckReportView(discord.ui.View):
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: EMOJI_CMP_ATK * 3
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -180,7 +180,7 @@ class AttarckReportView(discord.ui.View):
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: EMOJI_YET_ATK * 3
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -357,7 +357,7 @@ def setup(bot: BotClass):
     bot.persistent_view_classes.add(AttarckReportView)
 
 
-def change_reports(
+async def change_reports(
     guild: discord.Guild, target_date: date, user_id: int, repl_func: Callable[[str], str]
 ) -> tuple[bool, str, str]:
     reports = mongo.AttackReport.Gets(guild.id, target_date)
@@ -371,10 +371,19 @@ def change_reports(
     reports[target_repo[0]] = target_repo[1]
     reports = sorted(reports, key=lambda r: (r.report.count(EMOJI_YET_ATK), r.report.count(EMOJI_CARRY)), reverse=True)
 
-    member = guild.get_member(user_id)
-    if member is None:
-        _ = guild.fetch_members()
-    repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports]
+    lost_members = []
+    for r in reports:
+        if guild.get_member(r.user_id) is None:
+            fetched_mems = await guild.fetch_members().flatten()
+            fetched_uids = [m.id for m in fetched_mems]
+            lost_members = [rr for rr in reports if rr.user_id not in fetched_uids]
+            break
+
+    repo_list = [
+        f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports if r not in lost_members
+    ]
+    lost_repo_list = [f"{r.report} : ユーザID: {r.user_id} が見つかりませんでした。" for r in reports if r in lost_members]
+    repo_list += lost_repo_list
     repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 
     yet_atk_count = sum([r.report.count(EMOJI_YET_ATK, 0, 3) for r in reports])
@@ -407,9 +416,11 @@ async def update_yet_complete_role(guild: discord.Guild, target_date: date):
     remove_role_user_ids = role_user_ids - repo_yet_user_ids
     for uid in remove_role_user_ids:
         mem = guild.get_member(uid)
-        await mem.remove_roles(yet_cmp_role)
+        if mem is not None:
+            await mem.remove_roles(yet_cmp_role)
 
     add_role_user_ids = repo_yet_user_ids - role_user_ids
     for uid in add_role_user_ids:
         mem = guild.get_member(uid)
-        await mem.add_roles(yet_cmp_role)
+        if mem is not None:
+            await mem.add_roles(yet_cmp_role)
