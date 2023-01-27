@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from http.client import HTTPException
 from logging import getLogger
 from typing import Callable
@@ -66,15 +66,15 @@ class AttarckReportView(discord.ui.View):
     )
     @btn_log.log("push attack complete button")
     async def AttackCompleteButton(self, button, interaction: discord.Interaction):
-        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+        create_date = (interaction.message.created_at.astimezone(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
+        if (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date() > create_date:
             return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
         embed = interaction.message.embeds[0].copy()
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_YET_ATK, EMOJI_CMP_ATK, 1)
-        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -91,15 +91,15 @@ class AttarckReportView(discord.ui.View):
     )
     @btn_log.log("push attack carry button")
     async def AttackCarryButton(self, button, interaction: discord.Interaction):
-        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+        create_date = (interaction.message.created_at.astimezone(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
+        if (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date() > create_date:
             return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
         embed = interaction.message.embeds[0].copy()
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_YET_ATK, EMOJI_CARRY, 1)
-        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -114,15 +114,15 @@ class AttarckReportView(discord.ui.View):
     )
     @btn_log.log("push carry complete button")
     async def CarryCompleteButton(self, button, interaction: discord.Interaction):
-        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+        create_date = (interaction.message.created_at.astimezone(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
+        if (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date() > create_date:
             return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
         embed = interaction.message.embeds[0].copy()
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: r.replace(EMOJI_CARRY, EMOJI_CMP_ATK, 1)
-        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -137,15 +137,15 @@ class AttarckReportView(discord.ui.View):
     @discord.ui.button(style=discord.ButtonStyle.gray, label="全凸消化", custom_id="all_complete")
     @btn_log.log("push all complete button")
     async def AllCompleteButton(self, button, interaction: discord.Interaction):
-        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+        create_date = (interaction.message.created_at.astimezone(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
+        if (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date() > create_date:
             return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
         embed = interaction.message.embeds[0].copy()
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: EMOJI_CMP_ATK * 3
-        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -160,7 +160,7 @@ class AttarckReportView(discord.ui.View):
     @discord.ui.button(style=discord.ButtonStyle.blurple, label="メモ", custom_id="report_memo", row=2)
     @btn_log.log("push report memo button")
     async def ReportMemoButton(self, button, interaction: discord.Interaction):
-        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
+        create_date = (interaction.message.created_at.astimezone(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
         target_repo = mongo.AttackReport.Get(interaction.guild.id, create_date, interaction.user.id)
 
         if target_repo is None:
@@ -172,15 +172,15 @@ class AttarckReportView(discord.ui.View):
     @discord.ui.button(style=discord.ButtonStyle.danger, label="リセット", custom_id="reset_report", row=2)
     @btn_log.log("push reset report button")
     async def ResetReportButton(self, button, interaction: discord.Interaction):
-        if datetime.now(timezone.utc) > interaction.message.created_at + timedelta(days=1.0):
+        create_date = (interaction.message.created_at.astimezone(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
+        if (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date() > create_date:
             return await interaction.response.send_message("入力可能時間を過ぎています。", ephemeral=True)
 
         embed = interaction.message.embeds[0].copy()
         reports_field = embed.fields[0]
         repl_func: Callable[[str], str] = lambda r: EMOJI_YET_ATK * 3
-        create_date = interaction.message.created_at.astimezone(timezone(timedelta(hours=9))).date()
 
-        is_target, repl_reports, repo_summary = change_reports(
+        is_target, repl_reports, repo_summary = await change_reports(
             guild=interaction.guild, target_date=create_date, user_id=interaction.user.id, repl_func=repl_func
         )
         if not is_target:
@@ -357,7 +357,7 @@ def setup(bot: BotClass):
     bot.persistent_view_classes.add(AttarckReportView)
 
 
-def change_reports(
+async def change_reports(
     guild: discord.Guild, target_date: date, user_id: int, repl_func: Callable[[str], str]
 ) -> tuple[bool, str, str]:
     reports = mongo.AttackReport.Gets(guild.id, target_date)
@@ -371,10 +371,19 @@ def change_reports(
     reports[target_repo[0]] = target_repo[1]
     reports = sorted(reports, key=lambda r: (r.report.count(EMOJI_YET_ATK), r.report.count(EMOJI_CARRY)), reverse=True)
 
-    member = guild.get_member(user_id)
-    if member is None:
-        _ = guild.fetch_members()
-    repo_list = [f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports]
+    lost_members = []
+    for r in reports:
+        if guild.get_member(r.user_id) is None:
+            fetched_mems = await guild.fetch_members().flatten()
+            fetched_uids = [m.id for m in fetched_mems]
+            lost_members = [rr for rr in reports if rr.user_id not in fetched_uids]
+            break
+
+    repo_list = [
+        f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports if r not in lost_members
+    ]
+    lost_repo_list = [f"{r.report} : ユーザID: {r.user_id} が見つかりませんでした。" for r in reports if r in lost_members]
+    repo_list += lost_repo_list
     repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 
     yet_atk_count = sum([r.report.count(EMOJI_YET_ATK, 0, 3) for r in reports])
@@ -407,9 +416,11 @@ async def update_yet_complete_role(guild: discord.Guild, target_date: date):
     remove_role_user_ids = role_user_ids - repo_yet_user_ids
     for uid in remove_role_user_ids:
         mem = guild.get_member(uid)
-        await mem.remove_roles(yet_cmp_role)
+        if mem is not None:
+            await mem.remove_roles(yet_cmp_role)
 
     add_role_user_ids = repo_yet_user_ids - role_user_ids
     for uid in add_role_user_ids:
         mem = guild.get_member(uid)
-        await mem.add_roles(yet_cmp_role)
+        if mem is not None:
+            await mem.add_roles(yet_cmp_role)
