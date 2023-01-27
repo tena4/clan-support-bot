@@ -240,7 +240,7 @@ class AttarckReportCog(commands.Cog):
     @tasks.loop(time=time(hour=20, minute=0))
     async def scheduled_create_report(self):
         logger.info("run scheduled create report")
-        now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+        now_date = (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
         cbs = mongo.ClanBattleSchedule.Get()
         if cbs is None:
             return
@@ -338,7 +338,7 @@ class AttarckReportCog(commands.Cog):
     @slash_command(guild_ids=config.guild_ids, name="atk_report_make", description="凸完了報告表を作成")
     @cmd_log.info("call attack report make command")
     async def AttackReportCommand(self, ctx: discord.ApplicationContext):
-        now_date = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+        now_date = (datetime.now(ZoneInfo("Asia/Tokyo")) - timedelta(hours=5)).date()
         navigator = AttarckReportView()
         await ctx.defer()
         embed = await self.create_report_embed(ctx.guild, now_date)
