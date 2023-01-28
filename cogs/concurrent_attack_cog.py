@@ -74,8 +74,9 @@ class DamageModal(Modal):
         atk_contents = message.content.splitlines()
         self.boss_str = atk_contents[0].split(" ")[0]
 
-        target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {self.re_username} 目標\d+万 :", atk)][0]
-        self.add_item(InputText(label=target_attack, placeholder="ダメージを入力して下さい"))
+        self.target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {self.re_username} 目標\d+万 :", atk)][0]
+        cut_atk_message = self.target_attack[:44]
+        self.add_item(InputText(label=cut_atk_message, placeholder="ダメージを入力して下さい"))
 
     @cb_log.info("submit a damage modal")
     async def callback(self, interaction: discord.Interaction):
@@ -88,7 +89,7 @@ class DamageModal(Modal):
 
         notify = mongo.ConcurrentAttackNotify.Get(guild_id=interaction.guild_id)
         if notify is not None and notify.level >= 3:
-            attack = re.match(rf".*  {self.re_username} 目標\d+万 :", self.children[0].label).group()
+            attack = re.match(rf".*  {self.re_username} 目標\d+万 :", self.target_attack).group()
             embed = discord.Embed(
                 title="ダメージ入力しました。", fields=[discord.EmbedField(name=self.boss_str, value=f"{attack} {damage}")]
             )
