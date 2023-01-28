@@ -51,10 +51,11 @@ try:
     bot.load_extension("cogs.concurrent_attack_cog")
     bot.load_extension("cogs.fun_cog")
     bot.load_extension("cogs.tl_cog")
-    bot.load_extension("cogs.tl_video_cog")
     bot.load_extension("cogs.db_cog")
     bot.load_extension("cogs.manage_cog")
     bot.load_extension("cogs.attack_report_cog")
+    bot.load_extension("cogs.carry_over_cog")
+    bot.load_extension("cogs.tl_video_cog")
     bot.run(config.bot_token)
 
 finally:
