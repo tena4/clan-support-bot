@@ -151,9 +151,12 @@ class TargetDamageModal(Modal):
 
 
 class AttackStartModal(Modal):
-    def __init__(self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str) -> None:
+    def __init__(
+        self, guild_id: int, members: list[discord.Member], boss_number: int, boss_name: str, message_url: str
+    ) -> None:
         super().__init__(title=f"{boss_number}ボス {boss_name} 同時凸開始")
         self.boss_number = boss_number
+        self.message_url = message_url
         self.mentions = " ".join([mem.mention for mem in members])
         temp_msg = mongo.TemplateAttackStartMessage.Get(guild_id=guild_id, boss_number=boss_number)
         if temp_msg:
@@ -177,7 +180,7 @@ class AttackStartModal(Modal):
     @cb_log.info("submit a attack start modal")
     async def callback(self, interaction: discord.Interaction):
         content = self.mentions
-        embed = discord.Embed(title=self.title, description=self.children[0].value)
+        embed = discord.Embed(title=self.title, description=self.children[0].value, url=self.message_url)
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
         if self.children[1].value:
             embed.set_image(url=self.children[1].value)
@@ -394,7 +397,11 @@ class ConcurrentAttackButtonView(View):
         boss_number = int(boss_content.split(":")[0])
         boss_name = boss_content.split(":")[1]
         modal = AttackStartModal(
-            guild_id=interaction.guild_id, members=members, boss_number=boss_number, boss_name=boss_name
+            guild_id=interaction.guild_id,
+            members=members,
+            boss_number=boss_number,
+            boss_name=boss_name,
+            message_url=interaction.message.jump_url,
         )
         await interaction.response.send_modal(modal)
 
