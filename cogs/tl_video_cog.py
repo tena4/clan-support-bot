@@ -25,16 +25,20 @@ cmd_log = CommandLogDecorator(logger=logger)
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
 IGNORE_WORDS = ["Ark", "このファン", "コノファン", "2段階目", "3段階目"]
+JPN_TIME_DIFF = timedelta(hours=9)
 
 
 class TLVideoCog(commands.Cog):
     boss_num_desc = "ボスの番号"
     is_carry_over_desc = "持ち越し用"
+    begin_time_desc = "開始時間(yyyy-mm-dd hh:mm)"
+    end_time_desc = "終了時間(yyyy-mm-dd hh:mm)"
 
     def __init__(self, bot: BotClass):
         self.bot = bot
         self.task_count = 0
         self.msg = None
+        self.lock = asyncio.Lock()
         self.enabled = len(config.youtube_api_keys) > 0
         if self.enabled:
             self.get_api_key = select_api_key()
@@ -46,25 +50,29 @@ class TLVideoCog(commands.Cog):
 
     @tasks.loop(minutes=30.0)
     async def scheduled_tl_search(self):
+        async with self.lock:
+            now_time = datetime.now(timezone.utc)
+            begin_time = now_time - timedelta(hours=12.0)
+            await self.search_tl_video(begin_time, now_time)
+
+    async def search_tl_video(self, begin_time: datetime, end_time: datetime):
         logger.info("run scheduled tl search")
         bosses = mongo.BossInfo.Gets()
         query = "({}) (段階目 | パーティ編成 | プリコネ | 敵UB)".format(" | ".join([f"intitle:{b.name}" for b in bosses]))
         api_key = self.get_api_key()
-        search_pub_before = datetime.now(timezone.utc)
-        search_pub_after = search_pub_before - timedelta(hours=12.0)
         try:
             logger.info(
                 "get videos by youtube search",
                 extra={
                     "json_fields": {
                         "query": query,
-                        "published_before": search_pub_before.isoformat(),
-                        "published_after": search_pub_after.isoformat(),
+                        "published_before": end_time.isoformat(),
+                        "published_after": begin_time.isoformat(),
                     }
                 },
             )
             search_videos = youtube_search(
-                query=query, published_after=search_pub_after, published_before=search_pub_before, api_key=api_key
+                query=query, published_after=begin_time, published_before=end_time, api_key=api_key
             )
             logger.info(
                 "got videos by youtube search",
@@ -94,7 +102,7 @@ class TLVideoCog(commands.Cog):
                 and v.damage > 0
             ]
 
-            gotten_pub_after = search_pub_before - timedelta(days=10.0)
+            gotten_pub_after = end_time - timedelta(days=10.0)
             gotten_videos = mongo.TLVideoGotten.Gets(published_after=gotten_pub_after, boss_number=boss.number)
             gotten_vids = [g.video_id for g in gotten_videos]
             gotten_vids = gotten_vids if gotten_vids is not None else []
@@ -135,7 +143,7 @@ class TLVideoCog(commands.Cog):
                     if boss_regex.search(v.title) and bool(re.search(r"(持ち?越|\d\d[s秒])", v.title)) == is_carry_over
                 ]
                 target_videos.sort(key=lambda x: x.damage, reverse=True)
-                updated_at = datetime.now(timezone(timedelta(hours=9)))
+                updated_at = datetime.now(timezone(JPN_TIME_DIFF))
                 updated_at_str = updated_at.strftime("%Y/%m/%d %H:%M:%S")
                 content = f"TL動画対象ボス: {boss.name}"
                 if is_carry_over:
@@ -353,6 +361,27 @@ class TLVideoCog(commands.Cog):
     async def ListTLVideosCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
+    @slash_command(guild_ids=config.guild_ids, name="exec_tl_search", description="TL動画検索の手動実行")
+    @cmd_log.info("call execute search tl video command")
+    async def ExecuteSearchTLVideoCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        begin_time: Option(str, begin_time_desc),
+        end_time: Option(str, end_time_desc),
+    ):
+        s_format = "%Y-%m-%d %H:%M"
+        parsed_begin_time = datetime.strptime(begin_time, s_format) - JPN_TIME_DIFF
+        parsed_end_time = datetime.strptime(end_time, s_format) - JPN_TIME_DIFF
+        await ctx.defer(ephemeral=True)
+        async with self.lock:
+            await self.search_tl_video(parsed_begin_time, parsed_end_time)
+        return await ctx.respond("TL動画検索実行完了しました。")
+
+    @ExecuteSearchTLVideoCommand.error
+    @cmd_log.error("execute search tl video command error")
+    async def ExecuteSearchTLVideoCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)
+
     @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_register", description="TL動画の新着通知を登録")
     @cmd_log.info("call list tl videos notify register command")
     async def ListTLVideosNotifyRegisterCommand(self, ctx: discord.ApplicationContext):
@@ -367,6 +396,7 @@ class TLVideoCog(commands.Cog):
             return await ctx.respond("既に登録されています。", ephemeral=True)
 
     @ListTLVideosNotifyRegisterCommand.error
+    @cmd_log.error("list tl videos notify register command error")
     async def ListTLVideosNotifyRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
@@ -418,7 +448,8 @@ class TLVideo:
         return f"https://www.youtube.com/watch?v={self.vid}"
 
     def __get_damage(self) -> int:
-        ext_dmgs = re.findall(r"\d{0,2},?\d{3,}(?![年s/])", self.title)
+        fixed_title = re.sub(r"\d{4}([年/])", "YYYY", self.title)
+        ext_dmgs = re.findall(r"\d{0,2},?\d{3,}(?![年s/])", fixed_title)
         ignore_dmg = str(self.published_at.year)
         if ignore_dmg in ext_dmgs:
             ext_dmgs.remove(ignore_dmg)
@@ -463,7 +494,7 @@ class TLVideoDetail(TLVideo):
 
 
 def create_video_embed(video: TLVideoDetail, updated_at: datetime) -> discord.Embed:
-    pub_at_jp = video.published_at.astimezone(timezone(timedelta(hours=9)))
+    pub_at_jp = video.published_at.astimezone(timezone(JPN_TIME_DIFF))
     pub_at_jp_str = pub_at_jp.strftime("%Y/%m/%d %H:%M:%S")
     embed = discord.Embed(
         title=video.title,
