@@ -452,3 +452,154 @@ class AttackReport:
             },
         )
         return is_deleted
+
+
+class ConcurrentAttackReserve:
+    __clt_name = "concurrent_attack_reserve"
+
+    def __init__(
+        self,
+        guild_id: int,
+        user_id: int,
+        boss_number: int,
+        kind: int,
+        damage: int,
+        memo: str,
+        _id: Optional[str] = None,
+    ) -> None:
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.boss_number = boss_number
+        self.kind = kind
+        self.damage = damage
+        self.memo = memo
+
+    @classmethod
+    def Get(cls, guild_id: int, user_id: int, boss_number: int, kind: int) -> Optional[ConcurrentAttackReserve]:
+        doc = helper.get_one(
+            cls.__clt_name,
+            filter={
+                "$and": [
+                    {"guild_id": guild_id},
+                    {"user_id": user_id},
+                    {"boss_number": boss_number},
+                    {"kind": kind},
+                ]
+            },
+        )
+        if doc is None:
+            return None
+        return ConcurrentAttackReserve(**doc)
+
+    @classmethod
+    def Gets(cls, guild_id: int, boss_number: int) -> list[ConcurrentAttackReserve]:
+        docs = helper.get_many(
+            cls.__clt_name,
+            filter={"$and": [{"guild_id": guild_id}, {"boss_number": boss_number}]},
+        )
+        return [ConcurrentAttackReserve(**doc) for doc in docs]
+
+    def Set(self) -> None:
+        helper.upsert_one(
+            self.__clt_name,
+            filter={
+                "$and": [
+                    {"guild_id": self.guild_id},
+                    {"user_id": self.user_id},
+                    {"boss_number": self.boss_number},
+                    {"kind": self.kind},
+                ]
+            },
+            update={"$set": {"damage": self.damage, "memo": self.memo}},
+        )
+
+    def Delete(self) -> bool:
+        is_deleted = helper.delete_one(
+            self.__clt_name,
+            filter={
+                "$and": [
+                    {"guild_id": self.guild_id},
+                    {"user_id": self.user_id},
+                    {"boss_number": self.boss_number},
+                    {"kind": self.kind},
+                ]
+            },
+        )
+        return is_deleted
+
+
+class ConcurrentAttackBoard:
+    __clt_name = "concurrent_attack_board"
+
+    def __init__(
+        self,
+        guild_id: int,
+        view_id: str,
+        boss_number: int,
+        hp: int,
+        attacks: list[ConcurrentAttackReal],
+        pass_attacks: list[ConcurrentAttackReal],
+        _id: Optional[str] = None,
+    ) -> None:
+        self.guild_id = guild_id
+        self.view_id = view_id
+        self.boss_number = boss_number
+        self.hp = hp
+        self.attacks = attacks
+        self.pass_attacks = pass_attacks
+
+    @classmethod
+    def Get(cls, guild_id: int, view_id: str, boss_number: int) -> Optional[ConcurrentAttackBoard]:
+        doc = helper.get_one(
+            cls.__clt_name,
+            filter={
+                "$and": [
+                    {"guild_id": guild_id},
+                    {"view_id": view_id},
+                    {"boss_number": boss_number},
+                ]
+            },
+        )
+        if doc is None:
+            return None
+        board = ConcurrentAttackBoard(**doc)
+        board.attacks = [ConcurrentAttackReal(**atk) for atk in board.attacks]
+        board.pass_attacks = [ConcurrentAttackReal(**atk) for atk in board.pass_attacks]
+        return board
+
+    def Set(self) -> None:
+        helper.upsert_one(
+            self.__clt_name,
+            filter={
+                "$and": [
+                    {"guild_id": self.guild_id},
+                    {"view_id": self.view_id},
+                    {"boss_number": self.boss_number},
+                ]
+            },
+            update={
+                "$set": {
+                    "hp": self.hp,
+                    "attacks": [atk.__dict__ for atk in self.attacks],
+                    "pass_attacks": [atk.__dict__ for atk in self.pass_attacks],
+                }
+            },
+        )
+
+
+class ConcurrentAttackReal:
+    def __init__(
+        self,
+        user_id: int,
+        kind: int,
+        damage: int,
+        post_damage: int,
+        memo: str,
+        reserve_id: str,
+    ) -> None:
+        self.user_id = user_id
+        self.kind = kind
+        self.damage = damage
+        self.post_damage = post_damage
+        self.memo = memo
+        self.reserve_id = reserve_id
