@@ -614,8 +614,16 @@ def add_note(atk_list: list[str], username: str, note: str) -> list[str]:
 
 def sort_by_damage(atk_list: list[str]) -> list[str]:
     atks = [(atk, re.search(r"万 : .+$", atk)) for atk in atk_list]
-    atks_with_note = [(atk, re.search(r"\d{3,}", note.group())) for atk, note in atks if note is not None]
-    atks_with_dmg = [(atk, int(dmg.group())) for atk, dmg in atks_with_note if dmg is not None]
+    atks_with_note = [
+        (atk, re.search(r"\d{3,}", note.group()), re.search(r"\+\d{2,}", note.group()))
+        for atk, note in atks
+        if note is not None
+    ]
+    atks_with_dmg = [
+        (atk, int(dmg.group()) + int(add_dmg.group() if add_dmg is not None else "0"))
+        for atk, dmg, add_dmg in atks_with_note
+        if dmg is not None
+    ]
     atks_with_dmg.sort(key=lambda a: a[1], reverse=True)
     sorted_atks = [atk for atk, _ in atks_with_dmg]
     atks_without_dmg = [atk for atk in atk_list if atk not in sorted_atks]
