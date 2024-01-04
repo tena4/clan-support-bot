@@ -17,6 +17,8 @@ class Config(Singleton):
     def __init__(self) -> None:
         load_dotenv(verbose=True)
         self.bot_token: str = os.environ.get("BOT_TOKEN")
+        self.admin_guild_id: str = os.environ.get("ADMIN_GUILD_ID")
+        self.admin_channel_id: str = os.environ.get("ADMIN_CHANNEL_ID")
         self.guild_ids: Optional[list[str]] = json.loads(os.environ.get("GUILD_IDS", "[]"))
         self.youtube_api_keys: list[str] = json.loads(os.environ.get("YOUTUBE_API_KEYS", "[]"))
         self.log_level: str = os.environ.get("LOG_LEVEL", "INFO")
@@ -27,5 +29,6 @@ class Config(Singleton):
         self.gcp_client_mail: str = os.environ["GCP_CLIENT_MAIL"]
         self.gcp_client_id: str = os.environ["GCP_CLIENT_ID"]
         self.gcp_client_x509_cert_url: str = os.environ["GCP_CLIENT_X509_CERT_URL"]
+        self.scraping_template_url: str = os.environ["SCRAPING_TEMPLATE_URL"]
         if len(self.guild_ids) == 0:
             self.guild_ids = None
