@@ -452,3 +452,39 @@ class AttackReport:
             },
         )
         return is_deleted
+
+
+class BotConfig:
+    __clt_name = "bot_config"
+
+    def __init__(
+        self,
+        auto_set_clan_battle_schedule: bool,
+        auto_set_boss_info: bool,
+        id: Optional[int] = None,
+        _id: Optional[str] = None,
+    ) -> None:
+        self.auto_set_clan_battle_schedule = auto_set_clan_battle_schedule
+        self.auto_set_boss_info = auto_set_boss_info
+
+    @classmethod
+    def Get(cls) -> Optional[BotConfig]:
+        doc = helper.get_one(
+            cls.__clt_name,
+            filter={"id": 1},
+        )
+        if doc is None:
+            return None
+        return BotConfig(**doc)
+
+    def Set(self) -> None:
+        helper.upsert_one(
+            self.__clt_name,
+            filter={"id": 1},
+            update={
+                "$set": {
+                    "auto_set_clan_battle_schedule": self.auto_set_clan_battle_schedule,
+                    "auto_set_boss_info": self.auto_set_boss_info,
+                }
+            },
+        )
