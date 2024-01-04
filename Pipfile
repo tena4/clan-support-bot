@@ -6,10 +6,12 @@ name = "pypi"
 [packages]
 python-dotenv = "*"
 google-api-python-client = "*"
-py-cord = {editable = true, ref = "master", git = "https://github.com/Pycord-Development/pycord"}
+py-cord = "2.5.0rc5"
 python-json-logger = "*"
 pymongo = {extras = ["srv"], version = "*"}
 google-cloud-logging = "*"
+beautifulsoup4 = "*"
+jinja2 = "*"
 
 [dev-packages]
 black = "*"

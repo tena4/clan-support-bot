@@ -1,11 +1,14 @@
-from datetime import date
+import calendar
+from datetime import date, timedelta
 from logging import getLogger
 
-import app_config
 import discord
-import mongo_data as mongo
 from discord.commands import Option, slash_command
-from discord.ext import commands
+from discord.ext import commands, tasks
+
+import app_config
+import mongo_data as mongo
+import scraping
 from log_decorator import CommandLogDecorator
 from mybot import BotClass
 
@@ -23,8 +26,9 @@ class DBCog(commands.Cog):
 
     def __init__(self, bot: BotClass):
         self.bot = bot
+        self.scheduled_auto_setting.start()
 
-    @slash_command(guild_ids=config.guild_ids, name="set_boss", description="[admin]ボス情報の登録")
+    @slash_command(guild_ids=[config.admin_guild_id], name="set_boss", description="[admin]ボス情報の登録")
     @cmd_log.info("call set boss command")
     @commands.is_owner()
     async def SetBossCommand(
@@ -47,7 +51,7 @@ class DBCog(commands.Cog):
     async def SetBossCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="get_bosses", description="[admin]ボス情報の参照")
+    @slash_command(guild_ids=[config.admin_guild_id], name="get_bosses", description="[admin]ボス情報の参照")
     @cmd_log.info("call get bosses command")
     @commands.is_owner()
     async def GetBossesCommand(self, ctx: discord.ApplicationContext):
@@ -62,7 +66,9 @@ class DBCog(commands.Cog):
     async def GetBossesCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="set_clan_battle_schedule", description="[admin]クランバトル開催期間の登録")
+    @slash_command(
+        guild_ids=[config.admin_guild_id], name="set_clan_battle_schedule", description="[admin]クランバトル開催期間の登録"
+    )
     @cmd_log.info("call set clan battle schedule command")
     @commands.is_owner()
     async def SetClanBattleScheduleCommand(
@@ -82,11 +88,13 @@ class DBCog(commands.Cog):
         await ctx.respond(f"クランバトル開催期間登録完了 開始日:{schedule.start_date}, 終了日:{schedule.end_date}", ephemeral=True)
 
     @SetClanBattleScheduleCommand.error
-    @cmd_log.error("call set clan battle schedule command")
+    @cmd_log.error("call set clan battle schedule command error")
     async def SetClanBattleScheduleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="get_clan_battle_schedule", description="[admin]クランバトル開催期間の参照")
+    @slash_command(
+        guild_ids=[config.admin_guild_id], name="get_clan_battle_schedule", description="[admin]クランバトル開催期間の参照"
+    )
     @cmd_log.info("call get clan battle schedule command")
     @commands.is_owner()
     async def GetClanBattleScheduleCommand(self, ctx: discord.ApplicationContext):
@@ -104,6 +112,77 @@ class DBCog(commands.Cog):
     @cmd_log.error("get clan battle schedule command error")
     async def GetClanBattleScheduleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @slash_command(guild_ids=[config.admin_guild_id], name="set_auto_setting", description="[admin]自動設定切替")
+    @cmd_log.info("call set auto setting command")
+    @commands.is_owner()
+    async def SetAutoSettingCommand(
+        self,
+        ctx: discord.ApplicationContext,
+        schedule_enabled: Option(bool),
+        boss_info_enabled: Option(bool),
+    ):
+        mongo.BotConfig(schedule_enabled, boss_info_enabled).Set()
+        bot_config = mongo.BotConfig.Get()
+        if bot_config is None:
+            await ctx.respond("自動設定の登録に失敗しました。", ephemeral=True)
+            return
+
+        await ctx.respond(
+            f"自動設定登録完了 クランバトル開催期間:{bot_config.auto_set_clan_battle_schedule}, ボス情報:{bot_config.auto_set_boss_info}",
+            ephemeral=True,
+        )
+
+    @SetAutoSettingCommand.error
+    @cmd_log.error("call set auto setting command error")
+    async def SetAutoSettingCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
+
+    @tasks.loop(hours=6.0)
+    async def scheduled_auto_setting(self):
+        logger.info("run scheduled auto setting")
+        bot_config = mongo.BotConfig.Get()
+        if bot_config is None:
+            return
+        guild = self.bot.get_guild(config.admin_guild_id)
+        if guild is None:
+            guild = await self.bot.fetch_guild(config.admin_guild_id)
+        channel = guild.get_channel(config.admin_channel_id)
+        if channel is None:
+            channel = await guild.fetch_channel(config.admin_channel_id)
+
+        nowdate = date.today()
+        target_lastday = calendar.monthrange(nowdate.year, nowdate.month)[1] - 1
+        target_start_date = date(nowdate.year, nowdate.month, target_lastday - 4)
+        target_end_date = date(nowdate.year, nowdate.month, target_lastday)
+
+        if bot_config.auto_set_clan_battle_schedule:
+            schedule = mongo.ClanBattleSchedule.Get()
+            if schedule is None or schedule.start_date != target_start_date or schedule.end_date != target_end_date:
+                mongo.ClanBattleSchedule(target_start_date, target_end_date).Set()
+                schedule = mongo.ClanBattleSchedule.Get()
+                if schedule is None:
+                    await channel.send("クランバトル開催期間の自動更新に失敗しました。")
+                else:
+                    await channel.send(f"クランバトル開催期間を自動更新しました。開始日:{schedule.start_date}, 終了日:{schedule.end_date}")
+
+        if (
+            bot_config.auto_set_boss_info
+            and target_start_date - timedelta(days=4) <= nowdate
+            and target_start_date > nowdate
+        ):
+            boss_map = scraping.scraping(nowdate)
+            if boss_map is not None:
+                for b in boss_map:
+                    trim_hp = b.hp // 10000
+                    boss = mongo.BossInfo.Get(number=b.num)
+                    if boss is None or boss.name != b.name or boss.hp != trim_hp:
+                        mongo.BossInfo(number=b.num, name=b.name, hp=trim_hp).Set()
+                        boss = mongo.BossInfo.Get(number=b.num)
+                        if boss is None:
+                            await channel.send("ボス情報の自動更新に失敗しました。")
+                        else:
+                            await channel.send(f"ボス情報を自動更新しました。number:{boss.number}, name:{boss.name}, hp:{boss.hp}")
 
 
 def setup(bot: BotClass):
