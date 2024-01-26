@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 python-dotenv = "*"
 google-api-python-client = "*"
-py-cord = "2.5.0rc5"
+py-cord = {ref = "60097c5a4db39232b62db450c4b9b06427a5da3c", git = "https://github.com/Pycord-Development/pycord"}
 python-json-logger = "*"
 pymongo = {extras = ["srv"], version = "*"}
 google-cloud-logging = "*"
