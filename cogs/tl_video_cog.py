@@ -450,6 +450,14 @@ class TLVideo:
     def __get_damage(self) -> int:
         fixed_title = re.sub(r"\d{4}([年/])", "YYYY", self.title)
         ext_dmgs = re.findall(r"\d{0,2},?\d{3,}(?![年s/])", fixed_title)
+        oku_dmgs = re.findall(r"\d{1,2}億\d{0,4}", fixed_title)
+        for dmg in oku_dmgs:
+            sp_dmg = str.split(dmg, sep="億")
+            man_dmg = "0000"
+            if len(sp_dmg) == 2:
+                man_dmg = sp_dmg[1].zfill(4)
+            ext_dmgs.append(sp_dmg[0] + man_dmg)
+
         ignore_dmg = str(self.published_at.year)
         if ignore_dmg in ext_dmgs:
             ext_dmgs.remove(ignore_dmg)
