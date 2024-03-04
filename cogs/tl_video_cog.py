@@ -451,7 +451,6 @@ class TLVideo:
         fixed_title = re.sub(r"\d{4}([年/])", "YYYY", self.title)
         ext_dmgs = re.findall(r"\d{0,2},?\d{3,}(?![年s/])", fixed_title)
         oku_dmgs = re.findall(r"\d{1}\.?\d{0,4}億\d{0,4}", fixed_title)
-        print(fixed_title)
         for dmg in oku_dmgs:
             sp_dmg = str.split(dmg, sep="億")
             dp_dmg = str.split(sp_dmg[0], ".")
