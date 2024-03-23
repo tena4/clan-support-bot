@@ -168,7 +168,7 @@ class DBCog(commands.Cog):
 
         if (
             bot_config.auto_set_boss_info
-            and target_start_date - timedelta(days=4) <= nowdate
+            and target_start_date - timedelta(days=3) <= nowdate
             and target_start_date > nowdate
         ):
             boss_map = scraping.scraping(nowdate)
