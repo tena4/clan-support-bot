@@ -37,7 +37,7 @@ def scraping(nowdate: date) -> Optional[list[bossMap]]:
         return boss_map
 
     except urllib3.exceptions.HTTPError as e:
-        print("scriping HTTP error occurred:", e)
+        logger.warn("scriping HTTP error occurred:", e)
         return
     except Exception as e:
         logger.warn(f"failed to scraping. {e}")
