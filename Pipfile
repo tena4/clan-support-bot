@@ -12,6 +12,7 @@ pymongo = {extras = ["srv"], version = "*"}
 google-cloud-logging = "*"
 beautifulsoup4 = "*"
 jinja2 = "*"
+flask = "*"
 
 [dev-packages]
 black = "*"
