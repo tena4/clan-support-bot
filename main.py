@@ -1,10 +1,10 @@
 import logging
 
 import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 import app_config
 from keep_alive import keep_alive
-from log_formatter import CustomJsonFormatter
 from mongo_helper import MongoConn
 from mybot import BotClass
 
@@ -21,7 +21,7 @@ logger = logging.getLogger()
 logger.setLevel(log_level_map[config.log_level])
 handler = logging.StreamHandler()
 formatter = logging.Formatter(
-    "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    "%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -36,6 +36,12 @@ sentry_sdk.init(
     # of sampled transactions.
     # We recommend adjusting this value in production.
     profiles_sample_rate=1.0,
+    integrations=[
+        LoggingIntegration(
+            level=logging.INFO,  # Capture info and above as breadcrumbs (this is the default)
+            event_level=logging.WARNING,  # Send warnings as events (default is logging.ERROR)
+        ),
+    ],
 )
 
 logger.info("bot start")
