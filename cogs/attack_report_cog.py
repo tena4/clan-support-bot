@@ -303,7 +303,9 @@ class AttarckReportCog(commands.Cog):
                 )
                 err_reg.Delete()
 
-    @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="atk_report_auto_register", description="凸完了報告表の自動作成を登録する"
+    )
     @cmd_log.info("call attack report make auto register command")
     async def AttackReportAutoRegisterCommand(self, ctx: discord.ApplicationContext):
         reglist = mongo.AttackReportRegister.Gets()
@@ -319,7 +321,11 @@ class AttarckReportCog(commands.Cog):
     async def AttackReportAutoRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="atk_report_auto_unregister", description="凸完了報告表の自動作成の登録を解除する")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="atk_report_auto_unregister",
+        description="凸完了報告表の自動作成の登録を解除する",
+    )
     @cmd_log.info("call attack report make auto unregister command")
     async def AttackReportAutoUnregisterCommand(self, ctx: discord.ApplicationContext):
         reglist = mongo.AttackReportRegister.Gets()
@@ -382,7 +388,9 @@ async def change_reports(
     repo_list = [
         f"{r.report} : {guild.get_member(r.user_id).display_name} : {r.memo}" for r in reports if r not in lost_members
     ]
-    lost_repo_list = [f"{r.report} : ユーザID: {r.user_id} が見つかりませんでした。" for r in reports if r in lost_members]
+    lost_repo_list = [
+        f"{r.report} : ユーザID: {r.user_id} が見つかりませんでした。" for r in reports if r in lost_members
+    ]
     repo_list += lost_repo_list
     repl_reports = "```\n" + "\n".join(repo_list) + "\n```"
 

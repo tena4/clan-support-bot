@@ -19,12 +19,8 @@ class Config(Singleton):
         self.bot_token: str = os.environ.get("BOT_TOKEN")
         self.admin_guild_id: str = os.environ.get("ADMIN_GUILD_ID")
         self.admin_channel_id: str = os.environ.get("ADMIN_CHANNEL_ID")
-        self.guild_ids: Optional[list[str]] = json.loads(
-            os.environ.get("GUILD_IDS", "[]")
-        )
-        self.youtube_api_keys: list[str] = json.loads(
-            os.environ.get("YOUTUBE_API_KEYS", "[]")
-        )
+        self.guild_ids: Optional[list[str]] = json.loads(os.environ.get("GUILD_IDS", "[]"))
+        self.youtube_api_keys: list[str] = json.loads(os.environ.get("YOUTUBE_API_KEYS", "[]"))
         self.log_level: str = os.environ.get("LOG_LEVEL", "INFO")
         self.database_url: str = os.environ.get("DATABASE_URL")
         self.sentry_dsn: str = os.environ.get("SENTRY_DSN")

@@ -20,9 +20,7 @@ log_level_map = {
 logger = logging.getLogger()
 logger.setLevel(log_level_map[config.log_level])
 handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
-)
+formatter = logging.Formatter("%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 

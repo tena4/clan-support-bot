@@ -56,9 +56,7 @@ class DBCog(commands.Cog):
     @SetBossCommand.error
     @cmd_log.error("set boss command error")
     async def SetBossCommand_error(self, ctx: discord.ApplicationContext, error):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
         guild_ids=[config.admin_guild_id],
@@ -81,9 +79,7 @@ class DBCog(commands.Cog):
     @GetBossesCommand.error
     @cmd_log.error("get bosses command error")
     async def GetBossesCommand_error(self, ctx: discord.ApplicationContext, error):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
         guild_ids=[config.admin_guild_id],
@@ -104,9 +100,7 @@ class DBCog(commands.Cog):
         ).Set()
         schedule = mongo.ClanBattleSchedule.Get()
         if schedule is None:
-            await ctx.respond(
-                "クランバトル開催期間の登録に失敗しました。", ephemeral=True
-            )
+            await ctx.respond("クランバトル開催期間の登録に失敗しました。", ephemeral=True)
             return
 
         await ctx.respond(
@@ -116,12 +110,8 @@ class DBCog(commands.Cog):
 
     @SetClanBattleScheduleCommand.error
     @cmd_log.error("call set clan battle schedule command error")
-    async def SetClanBattleScheduleCommand_error(
-        self, ctx: discord.ApplicationContext, error
-    ):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+    async def SetClanBattleScheduleCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
         guild_ids=[config.admin_guild_id],
@@ -143,12 +133,8 @@ class DBCog(commands.Cog):
 
     @GetClanBattleScheduleCommand.error
     @cmd_log.error("get clan battle schedule command error")
-    async def GetClanBattleScheduleCommand_error(
-        self, ctx: discord.ApplicationContext, error
-    ):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+    async def GetClanBattleScheduleCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
         guild_ids=[config.admin_guild_id],
@@ -177,9 +163,7 @@ class DBCog(commands.Cog):
     @SetAutoSettingCommand.error
     @cmd_log.error("call set auto setting command error")
     async def SetAutoSettingCommand_error(self, ctx: discord.ApplicationContext, error):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @tasks.loop(hours=6.0)
     async def scheduled_auto_setting(self):
@@ -201,11 +185,7 @@ class DBCog(commands.Cog):
 
         if bot_config.auto_set_clan_battle_schedule:
             schedule = mongo.ClanBattleSchedule.Get()
-            if (
-                schedule is None
-                or schedule.start_date != target_start_date
-                or schedule.end_date != target_end_date
-            ):
+            if schedule is None or schedule.start_date != target_start_date or schedule.end_date != target_end_date:
                 mongo.ClanBattleSchedule(target_start_date, target_end_date).Set()
                 schedule = mongo.ClanBattleSchedule.Get()
                 if schedule is None:
