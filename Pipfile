@@ -9,15 +9,13 @@ google-api-python-client = "*"
 py-cord = {ref = "60097c5a4db39232b62db450c4b9b06427a5da3c", git = "https://github.com/Pycord-Development/pycord"}
 python-json-logger = "*"
 pymongo = {extras = ["srv"], version = "*"}
-google-cloud-logging = "*"
 beautifulsoup4 = "*"
 jinja2 = "*"
 flask = "*"
+sentry-sdk = "*"
 
 [dev-packages]
-black = "*"
-flake8 = "*"
-isort = "*"
+ruff = "*"
 
 [requires]
 python_version = "3.9"

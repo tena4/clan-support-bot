@@ -66,7 +66,9 @@ class ManageCog(commands.Cog):
     async def DeleteMessageMsgCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="set_clan_member_role", description="クランメンバーのロールを登録する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="set_clan_member_role", description="クランメンバーのロールを登録する"
+    )
     @cmd_log.info("call set clan member role command")
     async def SetClanMemberRoleCommand(
         self,
@@ -75,14 +77,20 @@ class ManageCog(commands.Cog):
     ):
         role: discord.Role = role
         mongo.ClanMemberRole(guild_id=ctx.guild_id, role_id=role.id).Set()
-        return await ctx.respond(f"クランメンバーのロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True)
+        return await ctx.respond(
+            f"クランメンバーのロール(ID:{role.id}, Name:{role.name})を登録しました。", ephemeral=True
+        )
 
     @SetClanMemberRoleCommand.error
     @cmd_log.error("set clan member role command error")
     async def SetClanMemberRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="get_clan_member_role", description="登録されているクランメンバーのロールを表示する")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="get_clan_member_role",
+        description="登録されているクランメンバーのロールを表示する",
+    )
     @cmd_log.info("call get clan member role command")
     async def GetClanMemberRoleCommand(
         self,
@@ -93,14 +101,18 @@ class ManageCog(commands.Cog):
             return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
 
         role = ctx.guild.get_role(clan_role.role_id)
-        return await ctx.respond(f"クランメンバーのロール(ID:{role.id}, Name:{role.name})が登録されています。", ephemeral=True)
+        return await ctx.respond(
+            f"クランメンバーのロール(ID:{role.id}, Name:{role.name})が登録されています。", ephemeral=True
+        )
 
     @GetClanMemberRoleCommand.error
     @cmd_log.error("get clan member role command error")
     async def GetClanMemberRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="remove_clan_member_role", description="クランメンバーのロールを登録解除する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="remove_clan_member_role", description="クランメンバーのロールを登録解除する"
+    )
     @cmd_log.info("call remove clan member role command")
     async def RemoveClanMemberRoleCommand(
         self,
@@ -134,7 +146,11 @@ class ManageCog(commands.Cog):
     async def SetYetCompleteRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="get_yet_complete_role", description="登録されている未完了凸のロールを表示する")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="get_yet_complete_role",
+        description="登録されている未完了凸のロールを表示する",
+    )
     @cmd_log.info("call get yet complete role command")
     async def GetYetCompleteRoleCommand(
         self,
@@ -145,14 +161,18 @@ class ManageCog(commands.Cog):
             return await ctx.respond("該当するロールが存在しません。", ephemeral=True)
 
         role = ctx.guild.get_role(clan_role.role_id)
-        return await ctx.respond(f"未完了凸のロール(ID:{role.id}, Name:{role.name})が登録されています。", ephemeral=True)
+        return await ctx.respond(
+            f"未完了凸のロール(ID:{role.id}, Name:{role.name})が登録されています。", ephemeral=True
+        )
 
     @GetYetCompleteRoleCommand.error
     @cmd_log.error("get yet complete role command error")
     async def GetYetCompleteRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="remove_yet_complete_role", description="未完了凸のロールを登録解除する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="remove_yet_complete_role", description="未完了凸のロールを登録解除する"
+    )
     @cmd_log.info("call remove yet complete role command")
     async def RemoveYetCompleteRoleCommand(
         self,
@@ -170,7 +190,11 @@ class ManageCog(commands.Cog):
     async def RemoveYetCompleteRoleCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="detach_all_yet_complete_role", description="未完了凸のロールを全ユーザから外す")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="detach_all_yet_complete_role",
+        description="未完了凸のロールを全ユーザから外す",
+    )
     @cmd_log.info("call detach all yet complete role command")
     async def DetachAllYetCompleteRoleCommand(
         self,
@@ -189,7 +213,9 @@ class ManageCog(commands.Cog):
         cnt = len(yc_role.members)
         for m in yc_role.members:
             await m.remove_roles(yc_role)
-        return await ctx.respond(f"全ユーザ(対象:{cnt}名)の未完了凸のロール(ID:{clan_role.role_id})取り外し完了", ephemeral=True)
+        return await ctx.respond(
+            f"全ユーザ(対象:{cnt}名)の未完了凸のロール(ID:{clan_role.role_id})取り外し完了", ephemeral=True
+        )
 
     @DetachAllYetCompleteRoleCommand.error
     @cmd_log.error("detach all yet complete role command error")
@@ -205,14 +231,18 @@ class ManageCog(commands.Cog):
     ):
         role: discord.Role = role
         members_str = "\n".join([m.display_name for m in role.members])
-        return await ctx.respond(f"ロール(ID:{role.id}, Name:{role.name})のメンバー一覧\n{members_str}", ephemeral=True)
+        return await ctx.respond(
+            f"ロール(ID:{role.id}, Name:{role.name})のメンバー一覧\n{members_str}", ephemeral=True
+        )
 
     @GetRoleMembersCommand.error
     @cmd_log.error("get role members command error")
     async def GetRoleMembersCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="set_status", description="[admin]botのステータスメッセージを設定する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="set_status", description="[admin]botのステータスメッセージを設定する"
+    )
     @cmd_log.info("call set status command")
     @commands.is_owner()
     async def SetStatusCommand(

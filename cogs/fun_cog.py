@@ -2,10 +2,11 @@ import os
 import random
 from logging import getLogger
 
-import app_config
 import discord
 from discord.commands import Option, slash_command
 from discord.ext import commands
+
+import app_config
 from log_decorator import CommandLogDecorator
 from mybot import BotClass
 
@@ -46,7 +47,10 @@ class FunCog(commands.Cog):
         img_filename = f"coin_{result[0]}.png"
         coin_img_path = f"{ROOT_DIR}{os.sep}assets{os.sep}{img_filename}"
         file = discord.File(coin_img_path, filename=img_filename)
-        embed = discord.Embed(title=f"flip a coin : **{result[0]}({result[1]})**", colour=discord.Colour.random())
+        embed = discord.Embed(
+            title=f"flip a coin : **{result[0]}({result[1]})**",
+            colour=discord.Colour.random(),
+        )
         embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
         embed.set_image(url=f"attachment://{img_filename}")
         await ctx.respond(embed=embed, file=file)

@@ -19,7 +19,6 @@ class BotClass(discord.Bot):
     # For making the intreaction Button works even after restart.
     async def on_ready(self):
         if not self.persistent_views_added:
-
             # You can add <discord.ui.View> classes to the <commands.Bot.add_view> to make it work after restart
             # self.add_view(<discord.ui.View>)
             for vs in self.persistent_view_classes:

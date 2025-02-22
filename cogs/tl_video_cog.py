@@ -42,7 +42,7 @@ class TLVideoCog(commands.Cog):
         self.enabled = len(config.youtube_api_keys) > 0
         if self.enabled:
             self.get_api_key = select_api_key()
-            self.cached_embeds: dict[str, (str, list[discord.Embed])] = {f"{i//2}_{i%2}": () for i in range(2, 12)}
+            self.cached_embeds: dict[str, (str, list[discord.Embed])] = {f"{i // 2}_{i % 2}": () for i in range(2, 12)}
             self.scheduled_tl_search.start()
 
     def cog_unload(self):
@@ -58,28 +58,29 @@ class TLVideoCog(commands.Cog):
     async def search_tl_video(self, begin_time: datetime, end_time: datetime):
         logger.info("run scheduled tl search")
         bosses = mongo.BossInfo.Gets()
-        query = "({}) (段階目 | パーティ編成 | プリコネ | 敵UB)".format(" | ".join([f"intitle:{b.name}" for b in bosses]))
+        query = "({}) (段階目 | パーティ編成 | プリコネ | 敵UB)".format(
+            " | ".join([f'intitle:"{b.name}"' for b in bosses])
+        )
         api_key = self.get_api_key()
         try:
             logger.info(
-                "get videos by youtube search",
+                f"get videos by youtube search. query: {query}",
                 extra={
-                    "json_fields": {
-                        "query": query,
-                        "published_before": end_time.isoformat(),
-                        "published_after": begin_time.isoformat(),
-                    }
+                    "published_before": end_time.isoformat(),
+                    "published_after": begin_time.isoformat(),
                 },
             )
             search_videos = youtube_search(
-                query=query, published_after=begin_time, published_before=end_time, api_key=api_key
+                query=query,
+                published_after=begin_time,
+                published_before=end_time,
+                api_key=api_key,
             )
             logger.info(
-                "got videos by youtube search",
-                extra={"json_fields": {"videos_count": len(search_videos)}},
+                f"got videos by youtube search. videos_count: {len(search_videos)}",
             )
         except HttpError as e:
-            logger.warn(
+            logger.error(
                 "http error by youtube search",
                 extra={"json_fields": {"status": e.resp.status, "content": e.content}},
             )
@@ -117,16 +118,14 @@ class TLVideoCog(commands.Cog):
                 continue
             try:
                 logger.info(
-                    "get youtube video",
-                    extra={"json_fields": {"video_ids_count": len(target_vids), "boss_number": boss.number}},
+                    f"get youtube video. video_ids_count: {len(target_vids)}, boss_number: {boss.number}",
                 )
                 target_videos_src = get_youtube_videos(target_vids, api_key)
                 logger.info(
-                    "got youtube video",
-                    extra={"json_fields": {"video_ids_count": len(target_videos_src), "boss_number": boss.number}},
+                    f"got youtube video. video_ids_count: {len(target_videos_src)}, boss_number: {boss.number}",
                 )
             except HttpError as e:
-                logger.warn(
+                logger.error(
                     "http error by get youtube video",
                     extra={"json_fields": {"status": e.resp.status, "content": e.content}},
                 )
@@ -148,9 +147,14 @@ class TLVideoCog(commands.Cog):
                 content = f"TL動画対象ボス: {boss.name}"
                 if is_carry_over:
                     content += " (持ち越し)"
-                content += f"\n最終更新日時: {updated_at_str}\nヒット件数: {len(target_videos)}, ダメージ上位10件を表示"
+                content += (
+                    f"\n最終更新日時: {updated_at_str}\nヒット件数: {len(target_videos)}, ダメージ上位10件を表示"
+                )
                 embeds = [create_video_embed(v, updated_at) for v in target_videos[:10]]
-                self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] = (content, embeds)
+                self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] = (
+                    content,
+                    embeds,
+                )
 
                 subsc_msgs = mongo.ListTLSubscMessage.Gets(boss.number, is_carry_over)
                 err_msgs: list[mongo.ListTLSubscMessage] = []
@@ -222,7 +226,7 @@ class TLVideoCog(commands.Cog):
                         },
                     )
                     if em.Delete() is False:
-                        logger.warn(
+                        logger.error(
                             "failed to remove subscribe message",
                             extra={
                                 "json_fields": {
@@ -239,7 +243,8 @@ class TLVideoCog(commands.Cog):
             if len(yet_list) == 0:
                 continue
             notice_content = "TL動画対象ボス: {}\n通知時ダメージ順位: [{}]".format(
-                boss.name, ", ".join([f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list])
+                boss.name,
+                ", ".join([f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list]),
             )
             notice_video_embeds = [create_video_embed(v, updated_at) for _, v in yet_list]
             notify_list = mongo.TLVideoNotify.Gets()
@@ -307,7 +312,11 @@ class TLVideoCog(commands.Cog):
                 )
                 err_notify.Delete()
 
-    @slash_command(guild_ids=config.guild_ids, name="list_tl", description="定期的なTL動画のリストアップ(30分毎に更新)")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="list_tl",
+        description="定期的なTL動画のリストアップ(30分毎に更新)",
+    )
     @cmd_log.info("call list tl videos command")
     async def ListTLVideosCommand(
         self,
@@ -316,7 +325,7 @@ class TLVideoCog(commands.Cog):
         is_carry_over: Option(bool, is_carry_over_desc),
     ):
         if not self.enabled:
-            logger.warn(
+            logger.warning(
                 "Misconfiguration of YOUTUBE_API_KEY environment variable",
                 extra={
                     "json_fields": {
@@ -325,12 +334,15 @@ class TLVideoCog(commands.Cog):
                     },
                 },
             )
-            await ctx.respond("環境変数の設定が正しくされていません。(YOUTUBE_API_KEY)", ephemeral=True)
+            await ctx.respond(
+                "環境変数の設定が正しくされていません。(YOUTUBE_API_KEY)",
+                ephemeral=True,
+            )
             return
 
         boss = mongo.BossInfo.Get(number=boss_num)
         if boss is None:
-            logger.warn(
+            logger.warning(
                 "Misconfiguration of boss info resiger",
                 extra={
                     "json_fields": {
@@ -348,12 +360,12 @@ class TLVideoCog(commands.Cog):
                 content += " (持ち越し)"
             content += "\n次の定期更新までお待ちください。"
             interact: discord.Interaction = await ctx.respond(content)
-            msg = await interact.original_message()
+            msg = await interact.original_response()
             mongo.ListTLSubscMessage(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over).Set()
         else:
             content, embeds = self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"]
             interact: discord.Interaction = await ctx.respond(content, embeds=embeds)
-            msg = await interact.original_message()
+            msg = await interact.original_response()
             mongo.ListTLSubscMessage(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over).Set()
 
     @ListTLVideosCommand.error
@@ -361,7 +373,11 @@ class TLVideoCog(commands.Cog):
     async def ListTLVideosCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="exec_tl_search", description="TL動画検索の手動実行")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="exec_tl_search",
+        description="TL動画検索の手動実行",
+    )
     @cmd_log.info("call execute search tl video command")
     async def ExecuteSearchTLVideoCommand(
         self,
@@ -382,12 +398,20 @@ class TLVideoCog(commands.Cog):
     async def ExecuteSearchTLVideoCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
-    @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_register", description="TL動画の新着通知を登録")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="list_tl_notify_register",
+        description="TL動画の新着通知を登録",
+    )
     @cmd_log.info("call list tl videos notify register command")
     async def ListTLVideosNotifyRegisterCommand(self, ctx: discord.ApplicationContext):
         notify_list = mongo.TLVideoNotify.Gets()
         notify = next(
-            filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, notify_list), None
+            filter(
+                lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id,
+                notify_list,
+            ),
+            None,
         )
         if notify is None:
             mongo.TLVideoNotify(guild_id=ctx.guild_id, channel_id=ctx.channel_id).Set()
@@ -400,12 +424,20 @@ class TLVideoCog(commands.Cog):
     async def ListTLVideosNotifyRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="list_tl_notify_unregister", description="TL動画の新着通知を登録")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="list_tl_notify_unregister",
+        description="TL動画の新着通知を登録",
+    )
     @cmd_log.info("call list tl videos notify unregister command")
     async def ListTLVideosNotifyUnregisterCommand(self, ctx: discord.ApplicationContext):
         notify_list = mongo.TLVideoNotify.Gets()
         notyfy = next(
-            filter(lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id, notify_list), None
+            filter(
+                lambda x: x.guild_id == ctx.guild.id and x.channel_id == ctx.channel.id,
+                notify_list,
+            ),
+            None,
         )
         if notyfy is not None:
             notyfy.Delete()
@@ -534,7 +566,11 @@ def select_api_key():
 
 
 def youtube_search(
-    query: str, published_after: datetime, published_before: datetime, api_key: str, page_token: Optional[str] = None
+    query: str,
+    published_after: datetime,
+    published_before: datetime,
+    api_key: str,
+    page_token: Optional[str] = None,
 ) -> list[TLVideo]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
 
