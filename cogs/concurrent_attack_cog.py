@@ -74,7 +74,9 @@ class DamageModal(Modal):
         atk_contents = message.content.splitlines()
         self.boss_str = atk_contents[0].split(" ")[0]
 
-        self.target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {self.re_username} 目標\d+万 :", atk)][0]
+        self.target_attack = [atk for atk in atk_contents[2:] if re.search(rf"  {self.re_username} 目標\d+万 :", atk)][
+            0
+        ]
         cut_atk_message = self.target_attack[:44]
         self.add_item(InputText(label=cut_atk_message, placeholder="ダメージを入力して下さい"))
 
@@ -91,7 +93,8 @@ class DamageModal(Modal):
         if notify is not None and notify.level >= 3:
             attack = re.match(rf".*  {self.re_username} 目標\d+万 :", self.target_attack).group()
             embed = discord.Embed(
-                title="ダメージ入力しました。", fields=[discord.EmbedField(name=self.boss_str, value=f"{attack} {damage}")]
+                title="ダメージ入力しました。",
+                fields=[discord.EmbedField(name=self.boss_str, value=f"{attack} {damage}")],
             )
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
             channel = interaction.guild.get_channel_or_thread(notify.channel_id)
@@ -176,7 +179,9 @@ class AttackStartModal(Modal):
                 required=False,
             )
         )
-        self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
+        self.add_item(
+            InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False)
+        )
 
     @cb_log.info("submit a attack start modal")
     async def callback(self, interaction: discord.Interaction):
@@ -235,7 +240,9 @@ class UnfreezeModal(Modal):
                 required=False,
             )
         )
-        self.add_item(InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False))
+        self.add_item(
+            InputText(style=discord.InputTextStyle.singleline, label="画像URL", value=img_url, required=False)
+        )
 
     @cb_log.info("submit a unfreeze modal")
     async def callback(self, interaction: discord.Interaction):
@@ -361,7 +368,9 @@ class ConcurrentAttackButtonView(View):
         )
         await interaction.response.edit_message(content=repl_content)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, label="ダメ入力", emoji="📝", custom_id="input_damage", row=2)
+    @discord.ui.button(
+        style=discord.ButtonStyle.blurple, label="ダメ入力", emoji="📝", custom_id="input_damage", row=2
+    )
     @btn_log.log("push input damage attack button")
     async def InputDamageButton(self, button, interaction: discord.Interaction):
         atk_list = interaction.message.content.splitlines()
@@ -432,7 +441,9 @@ class ConcurrentAttackButtonView(View):
         )
 
         async def child_view_timeout():
-            await resp_msg.edit_original_message(content="インタラクションがタイムアウトしました。本メッセージは削除して下さい。")
+            await resp_msg.edit_original_message(
+                content="インタラクションがタイムアウトしました。本メッセージは削除して下さい。"
+            )
             pcview.stop()
 
         pcview.on_timeout = child_view_timeout
@@ -469,7 +480,9 @@ class ConcurrentAttackCog(commands.Cog):
     async def ConcurrentAttackCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="notify_concurrent_atk_register", description="同時凸の通知を登録する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="notify_concurrent_atk_register", description="同時凸の通知を登録する"
+    )
     @cmd_log.info("call notify concurrent attack regisuter command")
     async def NotifyConcurrentAttackRegisterCommand(
         self,
@@ -484,7 +497,9 @@ class ConcurrentAttackCog(commands.Cog):
     async def NotifyConcurrentAttackRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="notify_concurrent_atk_unregister", description="同時凸の通知を登録解除する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="notify_concurrent_atk_unregister", description="同時凸の通知を登録解除する"
+    )
     @cmd_log.info("call notify concurrent attack unregister command")
     async def NotifyConcurrentAttackUnregisterCommand(self, ctx: discord.ApplicationContext):
         notify = mongo.ConcurrentAttackNotify.Get(guild_id=ctx.guild_id)
@@ -499,7 +514,9 @@ class ConcurrentAttackCog(commands.Cog):
     async def NotifyConcurrentAttackUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="set_unfreeze_template", description="解凍メッセージのテンプレートを設定する")
+    @slash_command(
+        guild_ids=config.guild_ids, name="set_unfreeze_template", description="解凍メッセージのテンプレートを設定する"
+    )
     @cmd_log.info("call set unfreeze template command")
     async def SetUnfreezeTemplateCommand(
         self,
@@ -518,7 +535,11 @@ class ConcurrentAttackCog(commands.Cog):
     async def SetUnfreezeTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="remove_unfreeze_template", description="解凍メッセージのテンプレート設定を削除する")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="remove_unfreeze_template",
+        description="解凍メッセージのテンプレート設定を削除する",
+    )
     @cmd_log.info("call remove unfreeze template command")
     async def RemoveUnfreezeTemplateCommand(
         self, ctx: discord.ApplicationContext, boss_number: Option(int, boss_num_desc, choices=[1, 2, 3, 4, 5])
@@ -528,14 +549,20 @@ class ConcurrentAttackCog(commands.Cog):
             temp_msg.Delete()
             await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定を削除しました。", ephemeral=True)
         else:
-            await ctx.respond(f"解凍メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True)
+            await ctx.respond(
+                f"解凍メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True
+            )
 
     @RemoveUnfreezeTemplateCommand.error
     @cmd_log.error("call remove unfreeze template command error")
     async def RemoveUnfreezeTemplateCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
-    @slash_command(guild_ids=config.guild_ids, name="set_attack_start_template", description="凸開始メッセージのテンプレートを設定する")
+    @slash_command(
+        guild_ids=config.guild_ids,
+        name="set_attack_start_template",
+        description="凸開始メッセージのテンプレートを設定する",
+    )
     @cmd_log.info("call set attack start template command")
     async def SetAttackStartTemplateCommand(
         self,
@@ -555,7 +582,9 @@ class ConcurrentAttackCog(commands.Cog):
         return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
-        guild_ids=config.guild_ids, name="remove_attack_start_template", description="凸開始メッセージのテンプレート設定を削除する"
+        guild_ids=config.guild_ids,
+        name="remove_attack_start_template",
+        description="凸開始メッセージのテンプレート設定を削除する",
     )
     @cmd_log.info("call remove attack start template command")
     async def RemoveAttackStartTemplateCommand(
@@ -564,9 +593,13 @@ class ConcurrentAttackCog(commands.Cog):
         temp_msg = mongo.TemplateUnfreezeMessage.Get(guild_id=ctx.guild_id, boss_number=boss_number)
         if temp_msg is not None:
             temp_msg.Delete()
-            await ctx.respond(f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定を削除しました。", ephemeral=True)
+            await ctx.respond(
+                f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定を削除しました。", ephemeral=True
+            )
         else:
-            await ctx.respond(f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True)
+            await ctx.respond(
+                f"凸開始メッセージ({boss_number}ボス)のテンプレートの設定がされていません。", ephemeral=True
+            )
 
     @RemoveAttackStartTemplateCommand.error
     @cmd_log.error("call remove attack start template command error")

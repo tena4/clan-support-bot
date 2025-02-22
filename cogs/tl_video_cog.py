@@ -42,9 +42,7 @@ class TLVideoCog(commands.Cog):
         self.enabled = len(config.youtube_api_keys) > 0
         if self.enabled:
             self.get_api_key = select_api_key()
-            self.cached_embeds: dict[str, (str, list[discord.Embed])] = {
-                f"{i//2}_{i%2}": () for i in range(2, 12)
-            }
+            self.cached_embeds: dict[str, (str, list[discord.Embed])] = {f"{i // 2}_{i % 2}": () for i in range(2, 12)}
             self.scheduled_tl_search.start()
 
     def cog_unload(self):
@@ -61,18 +59,15 @@ class TLVideoCog(commands.Cog):
         logger.info("run scheduled tl search")
         bosses = mongo.BossInfo.Gets()
         query = "({}) (段階目 | パーティ編成 | プリコネ | 敵UB)".format(
-            " | ".join([f"intitle:{b.name}" for b in bosses])
+            " | ".join([f'intitle:"{b.name}"' for b in bosses])
         )
         api_key = self.get_api_key()
         try:
             logger.info(
-                "get videos by youtube search",
+                f"get videos by youtube search. query: {query}",
                 extra={
-                    "json_fields": {
-                        "query": query,
-                        "published_before": end_time.isoformat(),
-                        "published_after": begin_time.isoformat(),
-                    }
+                    "published_before": end_time.isoformat(),
+                    "published_after": begin_time.isoformat(),
                 },
             )
             search_videos = youtube_search(
@@ -82,8 +77,7 @@ class TLVideoCog(commands.Cog):
                 api_key=api_key,
             )
             logger.info(
-                "got videos by youtube search",
-                extra={"json_fields": {"videos_count": len(search_videos)}},
+                f"got videos by youtube search. videos_count: {len(search_videos)}",
             )
         except HttpError as e:
             logger.error(
@@ -110,19 +104,13 @@ class TLVideoCog(commands.Cog):
             ]
 
             gotten_pub_after = end_time - timedelta(days=10.0)
-            gotten_videos = mongo.TLVideoGotten.Gets(
-                published_after=gotten_pub_after, boss_number=boss.number
-            )
+            gotten_videos = mongo.TLVideoGotten.Gets(published_after=gotten_pub_after, boss_number=boss.number)
             gotten_vids = [g.video_id for g in gotten_videos]
             gotten_vids = gotten_vids if gotten_vids is not None else []
             yet_gotten_videos = [
-                mongo.TLVideoGotten(v.vid, v.published_at, boss.number)
-                for v in videos
-                if v.vid not in gotten_vids
+                mongo.TLVideoGotten(v.vid, v.published_at, boss.number) for v in videos if v.vid not in gotten_vids
             ]
-            yet_gotten_videos = (
-                yet_gotten_videos if yet_gotten_videos is not None else []
-            )
+            yet_gotten_videos = yet_gotten_videos if yet_gotten_videos is not None else []
             for yet_gv in yet_gotten_videos:
                 yet_gv.Set()
             target_vids = gotten_vids + [v.video_id for v in yet_gotten_videos]
@@ -130,30 +118,16 @@ class TLVideoCog(commands.Cog):
                 continue
             try:
                 logger.info(
-                    "get youtube video",
-                    extra={
-                        "json_fields": {
-                            "video_ids_count": len(target_vids),
-                            "boss_number": boss.number,
-                        }
-                    },
+                    f"get youtube video. video_ids_count: {len(target_vids)}, boss_number: {boss.number}",
                 )
                 target_videos_src = get_youtube_videos(target_vids, api_key)
                 logger.info(
-                    "got youtube video",
-                    extra={
-                        "json_fields": {
-                            "video_ids_count": len(target_videos_src),
-                            "boss_number": boss.number,
-                        }
-                    },
+                    f"got youtube video. video_ids_count: {len(target_videos_src)}, boss_number: {boss.number}",
                 )
             except HttpError as e:
                 logger.error(
                     "http error by get youtube video",
-                    extra={
-                        "json_fields": {"status": e.resp.status, "content": e.content}
-                    },
+                    extra={"json_fields": {"status": e.resp.status, "content": e.content}},
                 )
                 return
             except Exception:
@@ -165,9 +139,7 @@ class TLVideoCog(commands.Cog):
                 target_videos = [
                     v
                     for v in target_videos_src
-                    if boss_regex.search(v.title)
-                    and bool(re.search(r"(持ち?越|\d\d[s秒])", v.title))
-                    == is_carry_over
+                    if boss_regex.search(v.title) and bool(re.search(r"(持ち?越|\d\d[s秒])", v.title)) == is_carry_over
                 ]
                 target_videos.sort(key=lambda x: x.damage, reverse=True)
                 updated_at = datetime.now(timezone(JPN_TIME_DIFF))
@@ -175,7 +147,9 @@ class TLVideoCog(commands.Cog):
                 content = f"TL動画対象ボス: {boss.name}"
                 if is_carry_over:
                     content += " (持ち越し)"
-                content += f"\n最終更新日時: {updated_at_str}\nヒット件数: {len(target_videos)}, ダメージ上位10件を表示"
+                content += (
+                    f"\n最終更新日時: {updated_at_str}\nヒット件数: {len(target_videos)}, ダメージ上位10件を表示"
+                )
                 embeds = [create_video_embed(v, updated_at) for v in target_videos[:10]]
                 self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] = (
                     content,
@@ -265,22 +239,14 @@ class TLVideoCog(commands.Cog):
                         )
 
             target_videos_src.sort(key=lambda x: x.damage, reverse=True)
-            yet_list = [
-                (i, v)
-                for i, v in enumerate(target_videos_src)
-                if v.vid not in gotten_vids
-            ]
+            yet_list = [(i, v) for i, v in enumerate(target_videos_src) if v.vid not in gotten_vids]
             if len(yet_list) == 0:
                 continue
             notice_content = "TL動画対象ボス: {}\n通知時ダメージ順位: [{}]".format(
                 boss.name,
-                ", ".join(
-                    [f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list]
-                ),
+                ", ".join([f"**{str(i + 1)}**" if i <= 2 else str(i + 1) for i, _ in yet_list]),
             )
-            notice_video_embeds = [
-                create_video_embed(v, updated_at) for _, v in yet_list
-            ]
+            notice_video_embeds = [create_video_embed(v, updated_at) for _, v in yet_list]
             notify_list = mongo.TLVideoNotify.Gets()
             err_notify_list: list[mongo.TLVideoNotify] = []
             for notify in notify_list:
@@ -302,9 +268,7 @@ class TLVideoCog(commands.Cog):
                     channel = guild.get_channel(notify.channel_id)
                     if channel is None:
                         channel = await guild.fetch_channel(notify.channel_id)
-                    await channel.send(
-                        content=notice_content, embeds=notice_video_embeds[:10]
-                    )
+                    await channel.send(content=notice_content, embeds=notice_video_embeds[:10])
                 except discord.NotFound:
                     err_notify_list.append(notify)
                 except HTTPException:
@@ -387,9 +351,7 @@ class TLVideoCog(commands.Cog):
                     },
                 },
             )
-            await ctx.respond(
-                f"{boss_num}ボスの情報が登録されていません。", ephemeral=True
-            )
+            await ctx.respond(f"{boss_num}ボスの情報が登録されていません。", ephemeral=True)
             return
 
         if self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"] == ():
@@ -398,24 +360,18 @@ class TLVideoCog(commands.Cog):
                 content += " (持ち越し)"
             content += "\n次の定期更新までお待ちください。"
             interact: discord.Interaction = await ctx.respond(content)
-            msg = await interact.original_message()
-            mongo.ListTLSubscMessage(
-                msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over
-            ).Set()
+            msg = await interact.original_response()
+            mongo.ListTLSubscMessage(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over).Set()
         else:
             content, embeds = self.cached_embeds[f"{boss.number}_{int(is_carry_over)}"]
             interact: discord.Interaction = await ctx.respond(content, embeds=embeds)
-            msg = await interact.original_message()
-            mongo.ListTLSubscMessage(
-                msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over
-            ).Set()
+            msg = await interact.original_response()
+            mongo.ListTLSubscMessage(msg.guild.id, msg.channel.id, msg.id, boss.number, is_carry_over).Set()
 
     @ListTLVideosCommand.error
     @cmd_log.error("list tl videos command error")
     async def ListTLVideosCommand_error(self, ctx: discord.ApplicationContext, error):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
         guild_ids=config.guild_ids,
@@ -439,9 +395,7 @@ class TLVideoCog(commands.Cog):
 
     @ExecuteSearchTLVideoCommand.error
     @cmd_log.error("execute search tl video command error")
-    async def ExecuteSearchTLVideoCommand_error(
-        self, ctx: discord.ApplicationContext, error
-    ):
+    async def ExecuteSearchTLVideoCommand_error(self, ctx: discord.ApplicationContext, error):
         return await ctx.respond(error, ephemeral=True)
 
     @slash_command(
@@ -467,12 +421,8 @@ class TLVideoCog(commands.Cog):
 
     @ListTLVideosNotifyRegisterCommand.error
     @cmd_log.error("list tl videos notify register command error")
-    async def ListTLVideosNotifyRegisterCommand_error(
-        self, ctx: discord.ApplicationContext, error
-    ):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+    async def ListTLVideosNotifyRegisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
     @slash_command(
         guild_ids=config.guild_ids,
@@ -480,9 +430,7 @@ class TLVideoCog(commands.Cog):
         description="TL動画の新着通知を登録",
     )
     @cmd_log.info("call list tl videos notify unregister command")
-    async def ListTLVideosNotifyUnregisterCommand(
-        self, ctx: discord.ApplicationContext
-    ):
+    async def ListTLVideosNotifyUnregisterCommand(self, ctx: discord.ApplicationContext):
         notify_list = mongo.TLVideoNotify.Gets()
         notyfy = next(
             filter(
@@ -499,12 +447,8 @@ class TLVideoCog(commands.Cog):
 
     @ListTLVideosNotifyUnregisterCommand.error
     @cmd_log.error("list tl videos notify unregister command error")
-    async def ListTLVideosNotifyUnregisterCommand_error(
-        self, ctx: discord.ApplicationContext, error
-    ):
-        return await ctx.respond(
-            error, ephemeral=True
-        )  # ephemeral makes "Only you can see this" message
+    async def ListTLVideosNotifyUnregisterCommand_error(self, ctx: discord.ApplicationContext, error):
+        return await ctx.respond(error, ephemeral=True)  # ephemeral makes "Only you can see this" message
 
 
 def setup(bot: BotClass):
@@ -528,14 +472,8 @@ def timedelta_color(delta: timedelta) -> discord.Colour:
 class TLVideo:
     def __init__(self, youtube_item) -> None:
         self.title: str = youtube_item["snippet"]["title"]
-        self.vid: str = (
-            youtube_item["id"]["videoId"]
-            if type(youtube_item["id"]) is dict
-            else youtube_item["id"]
-        )
-        self.published_at = datetime.fromisoformat(
-            youtube_item["snippet"]["publishedAt"].replace("Z", "+00:00")
-        )
+        self.vid: str = youtube_item["id"]["videoId"] if type(youtube_item["id"]) is dict else youtube_item["id"]
+        self.published_at = datetime.fromisoformat(youtube_item["snippet"]["publishedAt"].replace("Z", "+00:00"))
         self.damage = self.__get_damage()
 
     def url(self) -> str:
@@ -585,22 +523,13 @@ class TLVideoDetail(TLVideo):
             party_members = [line for line in desc_lines[party_index : party_index + 5]]
             return "\n".join(party_members)
 
-        party_members = [
-            line
-            for line in desc_lines
-            if re.search(r"[★☆星]\d(\s|　)*(Lv|lv|最強)", line)
-        ]
+        party_members = [line for line in desc_lines if re.search(r"[★☆星]\d(\s|　)*(Lv|lv|最強)", line)]
         if len(party_members) >= 5:
             return "\n".join(party_members[:5])
 
         party_members_candidate = set(self.description.split())
-        party_members_candidate = [
-            candi.replace("（", "(").replace("）", ")")
-            for candi in party_members_candidate
-        ]
-        party_members = [
-            candi for candi in party_members_candidate if char.is_play_char(candi)
-        ]
+        party_members_candidate = [candi.replace("（", "(").replace("）", ")") for candi in party_members_candidate]
+        party_members = [candi for candi in party_members_candidate if char.is_play_char(candi)]
         if len(party_members) >= 1:
             party_members.extend(["???"] * (5 - len(party_members)))
             return "\n".join(party_members[:5])
@@ -662,11 +591,7 @@ def youtube_search(
         .execute()
     )
 
-    videos = [
-        TLVideo(result)
-        for result in response.get("items", [])
-        if result["id"]["kind"] == "youtube#video"
-    ]
+    videos = [TLVideo(result) for result in response.get("items", []) if result["id"]["kind"] == "youtube#video"]
 
     next_page_token = response.get("nextPageToken")
     if next_page_token:
@@ -682,9 +607,7 @@ def youtube_search(
     return videos
 
 
-def get_youtube_videos(
-    vid_list: list[str], api_key: str, page_token: Optional[str] = None
-) -> list[TLVideoDetail]:
+def get_youtube_videos(vid_list: list[str], api_key: str, page_token: Optional[str] = None) -> list[TLVideoDetail]:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=api_key)
     response = (
         youtube.videos()
@@ -697,11 +620,7 @@ def get_youtube_videos(
         .execute()
     )
 
-    videos = [
-        TLVideoDetail(result)
-        for result in response.get("items", [])
-        if result["kind"] == "youtube#video"
-    ]
+    videos = [TLVideoDetail(result) for result in response.get("items", []) if result["kind"] == "youtube#video"]
 
     next_page_token = response.get("nextPageToken")
     if next_page_token:

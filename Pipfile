@@ -15,9 +15,7 @@ flask = "*"
 sentry-sdk = "*"
 
 [dev-packages]
-black = "*"
-flake8 = "*"
-isort = "*"
+ruff = "*"
 
 [requires]
 python_version = "3.9"

@@ -133,11 +133,16 @@ class TLCog(commands.Cog):
         embed.add_field(
             name="秒数変換",
             value=(
-                "TLの秒数を指定した開始秒数に応じて変換する。\n" "元のTLは90秒開始想定としており、70秒と指定すれば20秒差し引かれた秒数に変換される。また120秒と指定すれば30秒足された秒数に変換される。"
+                "TLの秒数を指定した開始秒数に応じて変換する。\n"
+                "元のTLは90秒開始想定としており、70秒と指定すれば20秒差し引かれた秒数に変換される。また120秒と指定すれば30秒足された秒数に変換される。"
             ),
             inline=False,
         )
-        embed.add_field(name="フォーマット変換", value=("公式TLのフォーマットをちょっと見やすく変換する。\n" "同時刻のUBまとめと敵UBの表記を加工。"), inline=False)
+        embed.add_field(
+            name="フォーマット変換",
+            value=("公式TLのフォーマットをちょっと見やすく変換する。\n同時刻のUBまとめと敵UBの表記を加工。"),
+            inline=False,
+        )
         await ctx.respond(embed=embed, view=navigator)
 
     @TLLauncherCommand.error
